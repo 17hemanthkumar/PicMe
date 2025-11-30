@@ -44,13 +44,23 @@
                 
                 <!-- User Authentication Buttons -->
                 <div class="flex items-center space-x-4">
-                    {% if session.get('logged_in') %}
+                    {% if session.get('admin_logged_in') %}
+                        <span class="text-amber-600 text-sm font-medium hidden md:block">
+                            <i class="fas fa-shield-alt mr-1"></i>Admin: {{ session.get('admin_email') }}
+                        </span>
+                        <form action="/admin/logout" method="get" class="inline-block">
+                            <button type="submit" class="px-4 py-2 rounded-md text-sm font-medium text-amber-700 border border-amber-600 hover:bg-amber-50 transition-colors duration-200">Admin Logout</button>
+                        </form>
+                    {% elif session.get('logged_in') %}
                         <span class="text-gray-600 text-sm font-medium hidden md:block">Welcome, {{ session.get('user_email') }}</span>
                         <form action="/logout" method="get" class="inline-block">
                             <button type="submit" class="px-4 py-2 rounded-md text-sm font-medium text-red-600 border border-red-600 hover:bg-red-50 transition-colors duration-200">Logout</button>
                         </form>
                     {% else %}
-                        <a href="/login" class="px-4 py-2 rounded-md text-sm font-medium text-indigo-600 border border-indigo-600 hover:bg-indigo-50 transition-smooth">Login</a>
+                        <button onclick="openAdminModal()" class="px-4 py-2 rounded-md text-sm font-medium text-amber-600 border border-amber-600 hover:bg-amber-50 transition-smooth">
+                            <i class="fas fa-shield-alt mr-1"></i>Admin
+                        </button>
+                        <button onclick="openUserModal()" class="px-4 py-2 rounded-md text-sm font-medium text-indigo-600 border border-indigo-600 hover:bg-indigo-50 transition-smooth">Login</button>
                         <a href="/signup" class="px-4 py-2 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition-smooth">Get Started</a>
                     {% endif %}
                 </div>
@@ -275,11 +285,258 @@
         </div>
     </footer>
 
+    <!-- User Login Modal -->
+    <div id="userLoginModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50" onclick="closeUserModal(event)">
+        <div class="bg-white rounded-lg p-8 max-w-md w-full mx-4" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-900">User Login</h2>
+                <button onclick="closeUserModal()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <form id="userLoginForm" onsubmit="handleUserLogin(event)">
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-medium mb-2">Email</label>
+                    <input type="email" id="userEmail" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                </div>
+                
+                <div class="mb-6">
+                    <label class="block text-gray-700 text-sm font-medium mb-2">Password</label>
+                    <input type="password" id="userPassword" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                </div>
+                
+                <div id="userLoginError" class="mb-4 text-red-600 text-sm hidden"></div>
+                
+                <button type="submit" class="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition-smooth font-medium">
+                    Login
+                </button>
+                
+                <p class="mt-4 text-center text-gray-600 text-sm">
+                    Don't have an account? <a href="/signup" class="text-indigo-600 hover:text-indigo-700 font-medium">Sign up</a>
+                </p>
+            </form>
+        </div>
+    </div>
+
+    <!-- Admin Login/Signup Modal -->
+    <div id="adminModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50" onclick="closeAdminModal(event)">
+        <div class="bg-white rounded-lg p-8 max-w-md w-full mx-4" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-900">
+                    <i class="fas fa-shield-alt text-amber-600 mr-2"></i>
+                    <span id="adminModalTitle">Admin Login</span>
+                </h2>
+                <button onclick="closeAdminModal()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <!-- Admin Login Form -->
+            <form id="adminLoginForm" onsubmit="handleAdminLogin(event)" class="admin-form">
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-medium mb-2">Email</label>
+                    <input type="email" id="adminLoginEmail" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent">
+                </div>
+                
+                <div class="mb-6">
+                    <label class="block text-gray-700 text-sm font-medium mb-2">Password</label>
+                    <input type="password" id="adminLoginPassword" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent">
+                </div>
+                
+                <div id="adminLoginError" class="mb-4 text-red-600 text-sm hidden"></div>
+                
+                <button type="submit" class="w-full bg-amber-600 text-white py-3 rounded-lg hover:bg-amber-700 transition-smooth font-medium">
+                    Admin Login
+                </button>
+                
+                <p class="mt-4 text-center text-gray-600 text-sm">
+                    Don't have an admin account? <button type="button" onclick="showAdminSignup()" class="text-amber-600 hover:text-amber-700 font-medium">Sign up</button>
+                </p>
+            </form>
+
+            <!-- Admin Signup Form -->
+            <form id="adminSignupForm" onsubmit="handleAdminSignup(event)" class="admin-form hidden">
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-medium mb-2">Organization Name</label>
+                    <input type="text" id="adminOrgName" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent">
+                </div>
+                
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-medium mb-2">Email</label>
+                    <input type="email" id="adminSignupEmail" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent">
+                </div>
+                
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-medium mb-2">Password</label>
+                    <input type="password" id="adminSignupPassword" required minlength="6" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent">
+                </div>
+                
+                <div class="mb-6">
+                    <label class="block text-gray-700 text-sm font-medium mb-2">Confirm Password</label>
+                    <input type="password" id="adminConfirmPassword" required minlength="6" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent">
+                </div>
+                
+                <div id="adminSignupError" class="mb-4 text-red-600 text-sm hidden"></div>
+                
+                <button type="submit" class="w-full bg-amber-600 text-white py-3 rounded-lg hover:bg-amber-700 transition-smooth font-medium">
+                    Create Admin Account
+                </button>
+                
+                <p class="mt-4 text-center text-gray-600 text-sm">
+                    Already have an account? <button type="button" onclick="showAdminLogin()" class="text-amber-600 hover:text-amber-700 font-medium">Login</button>
+                </p>
+            </form>
+        </div>
+    </div>
+
     <script>
-        // Simple mobile menu toggle for the navigation
-        document.querySelector('nav button').addEventListener('click', function() {
-            const mobileMenu = document.querySelector('.mobile-menu');
-            mobileMenu.classList.toggle('hidden');
+        // User Login Modal Functions
+        function openUserModal() {
+            document.getElementById('userLoginModal').classList.remove('hidden');
+            document.getElementById('userLoginModal').classList.add('flex');
+        }
+
+        function closeUserModal(event) {
+            if (!event || event.target.id === 'userLoginModal') {
+                document.getElementById('userLoginModal').classList.add('hidden');
+                document.getElementById('userLoginModal').classList.remove('flex');
+                document.getElementById('userLoginError').classList.add('hidden');
+            }
+        }
+
+        function handleUserLogin(event) {
+            event.preventDefault();
+            
+            const email = document.getElementById('userEmail').value;
+            const password = document.getElementById('userPassword').value;
+            
+            fetch('/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ email, password })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.href = data.redirect;
+                } else {
+                    document.getElementById('userLoginError').textContent = data.error || 'Login failed';
+                    document.getElementById('userLoginError').classList.remove('hidden');
+                }
+            })
+            .catch(error => {
+                document.getElementById('userLoginError').textContent = 'An error occurred. Please try again.';
+                document.getElementById('userLoginError').classList.remove('hidden');
+            });
+        }
+
+        // Admin Modal Functions
+        function openAdminModal() {
+            document.getElementById('adminModal').classList.remove('hidden');
+            document.getElementById('adminModal').classList.add('flex');
+            showAdminLogin();
+        }
+
+        function closeAdminModal(event) {
+            if (!event || event.target.id === 'adminModal') {
+                document.getElementById('adminModal').classList.add('hidden');
+                document.getElementById('adminModal').classList.remove('flex');
+                document.getElementById('adminLoginError').classList.add('hidden');
+                document.getElementById('adminSignupError').classList.add('hidden');
+            }
+        }
+
+        function showAdminLogin() {
+            document.getElementById('adminModalTitle').textContent = 'Admin Login';
+            document.getElementById('adminLoginForm').classList.remove('hidden');
+            document.getElementById('adminSignupForm').classList.add('hidden');
+            document.getElementById('adminLoginError').classList.add('hidden');
+            document.getElementById('adminSignupError').classList.add('hidden');
+        }
+
+        function showAdminSignup() {
+            document.getElementById('adminModalTitle').textContent = 'Admin Signup';
+            document.getElementById('adminLoginForm').classList.add('hidden');
+            document.getElementById('adminSignupForm').classList.remove('hidden');
+            document.getElementById('adminLoginError').classList.add('hidden');
+            document.getElementById('adminSignupError').classList.add('hidden');
+        }
+
+        function handleAdminLogin(event) {
+            event.preventDefault();
+            
+            const email = document.getElementById('adminLoginEmail').value;
+            const password = document.getElementById('adminLoginPassword').value;
+            
+            fetch('/admin/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ email, password })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.href = data.redirect || '/event_organizer';
+                } else {
+                    document.getElementById('adminLoginError').textContent = data.message || 'Login failed';
+                    document.getElementById('adminLoginError').classList.remove('hidden');
+                }
+            })
+            .catch(error => {
+                document.getElementById('adminLoginError').textContent = 'An error occurred. Please try again.';
+                document.getElementById('adminLoginError').classList.remove('hidden');
+            });
+        }
+
+        function handleAdminSignup(event) {
+            event.preventDefault();
+            
+            const organizationName = document.getElementById('adminOrgName').value;
+            const email = document.getElementById('adminSignupEmail').value;
+            const password = document.getElementById('adminSignupPassword').value;
+            const confirmPassword = document.getElementById('adminConfirmPassword').value;
+            
+            // Validate passwords match
+            if (password !== confirmPassword) {
+                document.getElementById('adminSignupError').textContent = 'Passwords do not match!';
+                document.getElementById('adminSignupError').classList.remove('hidden');
+                return;
+            }
+            
+            fetch('/admin/register', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ organizationName, email, password })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Admin account created successfully! Please login.');
+                    showAdminLogin();
+                } else {
+                    document.getElementById('adminSignupError').textContent = data.error || 'Signup failed';
+                    document.getElementById('adminSignupError').classList.remove('hidden');
+                }
+            })
+            .catch(error => {
+                document.getElementById('adminSignupError').textContent = 'An error occurred. Please try again.';
+                document.getElementById('adminSignupError').classList.remove('hidden');
+            });
+        }
+
+        // Close modals on Escape key
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeUserModal();
+                closeAdminModal();
+            }
         });
     </script>
 </body>

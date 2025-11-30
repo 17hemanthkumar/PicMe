@@ -170,8 +170,10 @@ def serve_personal_photo_gallery():
     return render_template('personal_photo_gallery.html')
 
 @app.route('/event_organizer')
-@login_required
 def serve_event_organizer():
+    # Allow access for admins or logged-in users (organizers)
+    if not session.get('admin_logged_in') and not session.get('logged_in'):
+        return redirect(url_for('serve_index'))
     return render_template('event_organizer.html')
 
 # --- AUTH API ROUTES ---
@@ -272,6 +274,115 @@ def logout_user():
     session.clear()
     return redirect(url_for('serve_index'))
 
+# --- ADMIN AUTH ROUTES ---
+@app.route('/admin/register', methods=['POST'])
+def admin_register():
+    data = request.get_json()
+    organization_name = data.get('organizationName')
+    email = data.get('email')
+    password = data.get('password')
+
+    if not organization_name or not email or not password:
+        return jsonify({"success": False, "error": "All fields are required"}), 400
+
+    from werkzeug.security import generate_password_hash
+    hashed_password = generate_password_hash(password)
+
+    conn = get_db_connection()
+    if conn is None:
+        return jsonify({"success": False, "error": "Database connection failed"}), 500
+
+    try:
+        cursor = conn.cursor()
+        
+        # Check if admin email already exists
+        cursor.execute("SELECT id FROM admins WHERE email = %s", (email,))
+        if cursor.fetchone():
+            cursor.close()
+            conn.close()
+            return jsonify({"success": False, "error": "Admin email already registered"}), 400
+
+        # Insert new admin into admins table
+        cursor.execute(
+            """
+            INSERT INTO admins (organization_name, email, password)
+            VALUES (%s, %s, %s)
+            """,
+            (organization_name, email, hashed_password)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return jsonify({"success": True, "message": "Admin account created successfully"})
+    
+    except Exception as e:
+        print(f"Error during admin registration: {e}")
+        if conn:
+            conn.close()
+        return jsonify({"success": False, "error": "Registration failed"}), 500
+
+@app.route('/admin/login', methods=['POST'])
+def admin_login():
+    data = request.get_json()
+    email = data.get('email')
+    password = data.get('password')
+
+    if not email or not password:
+        return jsonify({"success": False, "message": "Email and password are required"}), 400
+
+    conn = get_db_connection()
+    if conn is None:
+        return jsonify({"success": False, "message": "Database connection failed"}), 500
+
+    from werkzeug.security import check_password_hash
+
+    try:
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute("SELECT * FROM admins WHERE email = %s", (email,))
+        admin = cursor.fetchone()
+        cursor.close()
+        conn.close()
+
+        if admin and check_password_hash(admin['password'], password):
+            # Create admin session
+            session['admin_logged_in'] = True
+            session['admin_id'] = admin['id']
+            session['admin_email'] = admin['email']
+            session['admin_organization'] = admin['organization_name']
+            
+            return jsonify({
+                "success": True,
+                "message": "Admin login successful",
+                "redirect": "/event_organizer"
+            })
+        else:
+            return jsonify({"success": False, "message": "Invalid credentials"}), 401
+
+    except Exception as e:
+        print(f"Error during admin login: {e}")
+        if conn:
+            conn.close()
+        return jsonify({"success": False, "message": "Login failed"}), 500
+
+@app.route('/admin/logout')
+def admin_logout():
+    # Clear only admin session keys, preserve user session if exists
+    session.pop('admin_logged_in', None)
+    session.pop('admin_id', None)
+    session.pop('admin_email', None)
+    session.pop('admin_organization', None)
+    return redirect(url_for('serve_index'))
+
+# Admin required decorator
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('admin_logged_in'):
+            return redirect(url_for('serve_index'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 # --- EVENTS API / PUBLIC DATA ---
 @app.route('/events', methods=['GET'])
 def get_events():
@@ -347,8 +458,10 @@ def recognize_face():
 
 # --- EVENT ORGANIZER API ---
 @app.route('/api/create_event', methods=['POST'])
-@login_required
 def create_event():
+    # Allow access for admins or logged-in users
+    if not session.get('admin_logged_in') and not session.get('logged_in'):
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
     try:
         data = request.get_json()
         event_name = data.get('eventName')
@@ -424,8 +537,10 @@ def get_qr_code(event_id):
     return "QR Code not found", 404
 
 @app.route('/api/upload_photos/<event_id>', methods=['POST'])
-@login_required
 def upload_event_photos(event_id):
+    # Allow access for admins or logged-in users
+    if not session.get('admin_logged_in') and not session.get('logged_in'):
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
     try:
         if 'photos' not in request.files:
             return jsonify({"success": False, "error": "No photos uploaded"}), 400
@@ -473,8 +588,10 @@ def upload_event_photos(event_id):
         return jsonify({"success": False, "error": "Failed to upload photos"}), 500
 
 @app.route('/api/my_events')
-@login_required
 def get_my_events():
+    # Allow access for admins or logged-in users
+    if not session.get('admin_logged_in') and not session.get('logged_in'):
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
     try:
         if os.path.exists(EVENTS_DATA_PATH):
             with open(EVENTS_DATA_PATH, 'r') as f:
@@ -528,8 +645,11 @@ def get_public_photo(event_id, filename):
     return "File Not Found", 404
 
 @app.route('/photos/<event_id>/<person_id>/<photo_type>/<filename>')
-@login_required
 def get_private_photo(event_id, person_id, photo_type, filename):
+    # Allow access for admins or logged-in users
+    if not session.get('admin_logged_in') and not session.get('logged_in'):
+        return "Unauthorized", 401
+    
     photo_path = os.path.join(
         app.config['PROCESSED_FOLDER'],
         event_id,
