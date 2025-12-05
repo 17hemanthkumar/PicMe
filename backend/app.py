@@ -588,11 +588,22 @@ def create_event():
     if not session.get('admin_logged_in') and not session.get('logged_in'):
         return jsonify({"success": False, "error": "Unauthorized"}), 401
     try:
-        data = request.get_json()
-        event_name = data.get('eventName')
-        event_location = data.get('eventLocation')
-        event_date = data.get('eventDate')
-        event_category = data.get('eventCategory', 'General')
+        # Check if request has multipart form data (with thumbnail) or JSON
+        if request.content_type and 'multipart/form-data' in request.content_type:
+            # Multipart form data with optional thumbnail
+            event_name = request.form.get('eventName')
+            event_location = request.form.get('eventLocation')
+            event_date = request.form.get('eventDate')
+            event_category = request.form.get('eventCategory', 'General')
+            thumbnail_file = request.files.get('thumbnail')
+        else:
+            # JSON data (legacy support)
+            data = request.get_json()
+            event_name = data.get('eventName')
+            event_location = data.get('eventLocation')
+            event_date = data.get('eventDate')
+            event_category = data.get('eventCategory', 'General')
+            thumbnail_file = None
 
         if not all([event_name, event_location, event_date]):
             return jsonify({"success": False, "error": "All fields are required"}), 400
@@ -604,6 +615,31 @@ def create_event():
         event_processed_dir = os.path.join(app.config['PROCESSED_FOLDER'], event_id)
         os.makedirs(event_upload_dir, exist_ok=True)
         os.makedirs(event_processed_dir, exist_ok=True)
+
+        # Handle thumbnail upload
+        thumbnail_filename = None
+        thumbnail_path = "/static/images/default_event.jpg"
+        
+        if thumbnail_file and thumbnail_file.filename:
+            # Validate file format
+            allowed_extensions = {'.png', '.jpg', '.jpeg'}
+            file_ext = os.path.splitext(thumbnail_file.filename)[1].lower()
+            
+            if file_ext not in allowed_extensions:
+                return jsonify({
+                    "success": False, 
+                    "error": f"Invalid image format. Allowed formats: PNG, JPG, JPEG"
+                }), 400
+            
+            # Generate unique filename with thumbnail_ prefix
+            thumbnail_filename = f"thumbnail_{uuid.uuid4().hex[:8]}{file_ext}"
+            thumbnail_file_path = os.path.join(event_upload_dir, thumbnail_filename)
+            
+            # Save thumbnail file
+            thumbnail_file.save(thumbnail_file_path)
+            
+            # Update thumbnail path to use API endpoint
+            thumbnail_path = f"/api/events/{event_id}/thumbnail"
 
         # QR code
         qr_data = f"{request.host_url.rstrip('/')}/event_detail?event_id={event_id}"
@@ -632,7 +668,8 @@ def create_event():
             "location": event_location,
             "date": event_date,
             "category": event_category,
-            "image": "/static/images/default_event.jpg",
+            "image": thumbnail_path,
+            "thumbnail_filename": thumbnail_filename,
             "photos_count": 0,
             "qr_code": f"/api/qr_code/{event_id}",
             "created_by_admin_id": created_by_admin_id,
@@ -665,6 +702,31 @@ def get_qr_code(event_id):
             f"{event_id}_qr.png"
         )
     return "QR Code not found", 404
+
+
+@app.route('/api/events/<event_id>/thumbnail')
+def get_event_thumbnail(event_id):
+    """Serve event thumbnail"""
+    # Load events data to get thumbnail filename
+    if os.path.exists(EVENTS_DATA_PATH):
+        with open(EVENTS_DATA_PATH, 'r') as f:
+            events_data = json.load(f)
+        
+        # Find the event
+        event = next((e for e in events_data if e['id'] == event_id), None)
+        if event and event.get('thumbnail_filename'):
+            thumbnail_path = os.path.join(
+                app.config['UPLOAD_FOLDER'], 
+                event_id, 
+                event['thumbnail_filename']
+            )
+            if os.path.exists(thumbnail_path):
+                return send_from_directory(
+                    os.path.join(app.config['UPLOAD_FOLDER'], event_id),
+                    event['thumbnail_filename']
+                )
+    
+    return "Thumbnail not found", 404
 
 
 @app.route('/api/upload_photos/<event_id>', methods=['POST'])
@@ -752,6 +814,187 @@ def get_my_events():
     except Exception as e:
         print(f"Error fetching events: {e}")
         return jsonify({"success": False, "error": "Failed to fetch events"}), 500
+
+
+@app.route('/api/events/<event_id>', methods=['PUT'])
+def update_event(event_id):
+    """
+    Update event details (name, location, date, category)
+    Requires admin authentication and ownership validation
+    """
+    # Check admin authentication
+    if not session.get('admin_logged_in'):
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
+    
+    try:
+        # Get request data
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+        
+        # Validate required fields
+        name = data.get('name')
+        location = data.get('location')
+        date = data.get('date')
+        category = data.get('category')
+        
+        if not all([name, location, date, category]):
+            return jsonify({
+                "success": False, 
+                "error": "All fields are required (name, location, date, category)"
+            }), 400
+        
+        # Load events data
+        if not os.path.exists(EVENTS_DATA_PATH):
+            return jsonify({"success": False, "error": "Events data file not found"}), 404
+        
+        with open(EVENTS_DATA_PATH, 'r') as f:
+            events_data = json.load(f)
+        
+        # Find the event
+        event = None
+        event_index = None
+        for i, e in enumerate(events_data):
+            if e['id'] == event_id:
+                event = e
+                event_index = i
+                break
+        
+        if not event:
+            return jsonify({"success": False, "error": "Event not found"}), 404
+        
+        # Check ownership - admin can only edit their own events
+        admin_id = session.get('admin_id')
+        if event.get('created_by_admin_id') != admin_id:
+            return jsonify({
+                "success": False, 
+                "error": "You can only edit events you created"
+            }), 403
+        
+        # Update event fields
+        event['name'] = name
+        event['location'] = location
+        event['date'] = date
+        event['category'] = category
+        
+        # Save updated events data
+        with open(EVENTS_DATA_PATH, 'w') as f:
+            json.dump(events_data, f, indent=2)
+        
+        return jsonify({
+            "success": True,
+            "event": event,
+            "message": "Event updated successfully"
+        }), 200
+    
+    except Exception as e:
+        print(f"Error updating event: {e}")
+        return jsonify({
+            "success": False, 
+            "error": "Failed to update event"
+        }), 500
+
+
+@app.route('/api/events/<event_id>/thumbnail', methods=['POST'])
+def update_event_thumbnail(event_id):
+    """
+    Upload or update event thumbnail
+    Requires admin authentication and ownership validation
+    """
+    # Check admin authentication
+    if not session.get('admin_logged_in'):
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
+    
+    try:
+        # Check if thumbnail file is provided
+        if 'thumbnail' not in request.files:
+            return jsonify({"success": False, "error": "No thumbnail file provided"}), 400
+        
+        thumbnail_file = request.files['thumbnail']
+        
+        if not thumbnail_file or thumbnail_file.filename == '':
+            return jsonify({"success": False, "error": "No thumbnail file selected"}), 400
+        
+        # Validate file format
+        allowed_extensions = {'.png', '.jpg', '.jpeg'}
+        file_ext = os.path.splitext(thumbnail_file.filename)[1].lower()
+        
+        if file_ext not in allowed_extensions:
+            return jsonify({
+                "success": False, 
+                "error": "Invalid image format. Allowed formats: PNG, JPG, JPEG"
+            }), 400
+        
+        # Load events data
+        if not os.path.exists(EVENTS_DATA_PATH):
+            return jsonify({"success": False, "error": "Events data file not found"}), 404
+        
+        with open(EVENTS_DATA_PATH, 'r') as f:
+            events_data = json.load(f)
+        
+        # Find the event
+        event = None
+        event_index = None
+        for i, e in enumerate(events_data):
+            if e['id'] == event_id:
+                event = e
+                event_index = i
+                break
+        
+        if not event:
+            return jsonify({"success": False, "error": "Event not found"}), 404
+        
+        # Check ownership - admin can only edit their own events
+        admin_id = session.get('admin_id')
+        if event.get('created_by_admin_id') != admin_id:
+            return jsonify({
+                "success": False, 
+                "error": "You can only edit events you created"
+            }), 403
+        
+        # Get event upload directory
+        event_upload_dir = os.path.join(app.config['UPLOAD_FOLDER'], event_id)
+        if not os.path.exists(event_upload_dir):
+            os.makedirs(event_upload_dir, exist_ok=True)
+        
+        # Delete old thumbnail file if it exists
+        old_thumbnail_filename = event.get('thumbnail_filename')
+        if old_thumbnail_filename:
+            old_thumbnail_path = os.path.join(event_upload_dir, old_thumbnail_filename)
+            if os.path.exists(old_thumbnail_path):
+                try:
+                    os.remove(old_thumbnail_path)
+                    print(f"Deleted old thumbnail: {old_thumbnail_path}")
+                except Exception as e:
+                    print(f"Warning: Failed to delete old thumbnail: {e}")
+        
+        # Generate unique filename with thumbnail_ prefix
+        new_thumbnail_filename = f"thumbnail_{uuid.uuid4().hex[:8]}{file_ext}"
+        new_thumbnail_path = os.path.join(event_upload_dir, new_thumbnail_filename)
+        
+        # Save new thumbnail file
+        thumbnail_file.save(new_thumbnail_path)
+        
+        # Update event data with new thumbnail
+        event['thumbnail_filename'] = new_thumbnail_filename
+        event['image'] = f"/api/events/{event_id}/thumbnail"
+        
+        # Save updated events data
+        with open(EVENTS_DATA_PATH, 'w') as f:
+            json.dump(events_data, f, indent=2)
+        
+        return jsonify({
+            "success": True,
+            "thumbnail_url": event['image'],
+            "message": "Thumbnail updated successfully"
+        }), 200
+    
+    except Exception as e:
+        print(f"Error updating thumbnail: {e}")
+        return jsonify({
+            "success": False, 
+            "error": "Failed to update thumbnail"
+        }), 500
 
 
 # --- PUBLIC & PRIVATE PHOTO SERVING ---

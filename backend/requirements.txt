@@ -6,3 +6,7 @@ pillow==8.3.1
 python-dotenv==0.19.0
 mysql-connector-python==8.0.27  # Add this line
 Werkzeug==2.0.1                 # Ensure Werkzeug is explicitly listed for hashing
+pytest==7.4.3
+hypothesis==6.92.1
+qrcode==7.4.2
+psycopg2-binary==2.9.9
