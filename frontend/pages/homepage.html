@@ -103,19 +103,19 @@
                 </div>
             </div>
             <div class="relative">
-                <div class="relative rounded-xl overflow-hidden shadow-2xl">
-                    <img src="https://images.unsplash.com/photo-1540575467063-178a50c2df87?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1180&q=80" 
-                         alt="People at a concert enjoying music" 
-                         class="w-full h-auto">
-                    <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-                    <div class="absolute bottom-0 left-0 p-6 text-white">
-                        <p class="text-sm font-medium">Music Festival 2023</p>
-                        <h3 class="text-xl font-bold">Summer Beats</h3>
-                        <p class="text-sm">1,245 photos available</p>
+                <div id="hero-carousel" class="relative rounded-xl overflow-hidden shadow-2xl h-96">
+                    <!-- Carousel slides will be inserted here -->
+                    <div class="absolute inset-0 flex items-center justify-center bg-gray-200">
+                        <p class="text-gray-500">Loading events...</p>
                     </div>
                 </div>
                 <div class="absolute -bottom-6 -left-6 w-32 h-32 bg-indigo-100 rounded-full -z-10"></div>
                 <div class="absolute -top-6 -right-6 w-24 h-24 bg-indigo-200 rounded-full -z-10"></div>
+                
+                <!-- Carousel indicators -->
+                <div id="carousel-indicators" class="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2 z-10">
+                    <!-- Indicators will be inserted here -->
+                </div>
             </div>
         </div>
     </section>
@@ -178,6 +178,115 @@
     </section>
 
     <script>
+        // Hero Carousel
+        let heroEvents = [];
+        let currentSlide = 0;
+        let carouselInterval;
+
+        function initHeroCarousel(events) {
+            const carousel = document.getElementById('hero-carousel');
+            const indicators = document.getElementById('carousel-indicators');
+            
+            if (events.length === 0) {
+                carousel.innerHTML = `
+                    <div class="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-600">
+                        <div class="text-center text-white p-6">
+                            <h3 class="text-2xl font-bold mb-2">No Events Yet</h3>
+                            <p class="text-indigo-100">Check back soon for upcoming events!</p>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            heroEvents = events.slice(-5).reverse(); // Get up to 5 most recent events
+            
+            // Create slides
+            carousel.innerHTML = heroEvents.map((event, index) => {
+                const eventDate = new Date(event.date).toLocaleDateString('en-US', { 
+                    year: 'numeric', 
+                    month: 'short', 
+                    day: 'numeric' 
+                });
+                
+                return `
+                    <div class="carousel-slide absolute inset-0 transition-opacity duration-1000 ${index === 0 ? 'opacity-100' : 'opacity-0'}" data-slide="${index}">
+                        <img src="${event.image || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=1180'}" 
+                             alt="${event.name}" 
+                             class="w-full h-full object-cover"
+                             onerror="this.src='https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=1180'">
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"></div>
+                        <div class="absolute bottom-0 left-0 p-6 text-white">
+                            <p class="text-sm font-medium">${event.category || 'Event'} • ${eventDate}</p>
+                            <h3 class="text-2xl font-bold mb-1">${event.name}</h3>
+                            <p class="text-sm mb-3">${event.photos_count || 0} photos available</p>
+                            <a href="/event_detail?event_id=${event.id}" class="inline-block px-4 py-2 bg-white/20 backdrop-blur-sm hover:bg-white/30 rounded-lg text-sm font-medium transition-colors">
+                                View Event →
+                            </a>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            // Create indicators
+            if (heroEvents.length > 1) {
+                indicators.innerHTML = heroEvents.map((_, index) => `
+                    <button class="carousel-indicator w-2 h-2 rounded-full transition-all duration-300 ${index === 0 ? 'bg-white w-8' : 'bg-white/50'}" 
+                            data-slide="${index}"
+                            onclick="goToSlide(${index})"></button>
+                `).join('');
+                
+                // Start auto-rotation
+                startCarousel();
+            }
+        }
+
+        function goToSlide(index) {
+            const slides = document.querySelectorAll('.carousel-slide');
+            const indicators = document.querySelectorAll('.carousel-indicator');
+            
+            // Hide current slide
+            slides[currentSlide].classList.remove('opacity-100');
+            slides[currentSlide].classList.add('opacity-0');
+            indicators[currentSlide].classList.remove('bg-white', 'w-8');
+            indicators[currentSlide].classList.add('bg-white/50');
+            
+            // Show new slide
+            currentSlide = index;
+            slides[currentSlide].classList.remove('opacity-0');
+            slides[currentSlide].classList.add('opacity-100');
+            indicators[currentSlide].classList.remove('bg-white/50');
+            indicators[currentSlide].classList.add('bg-white', 'w-8');
+            
+            // Reset interval
+            if (carouselInterval) {
+                clearInterval(carouselInterval);
+                startCarousel();
+            }
+        }
+
+        function startCarousel() {
+            carouselInterval = setInterval(() => {
+                const nextSlide = (currentSlide + 1) % heroEvents.length;
+                goToSlide(nextSlide);
+            }, 5000); // Change slide every 5 seconds
+        }
+
+        // Load events and initialize carousel
+        fetch('/events')
+            .then(response => response.json())
+            .then(events => {
+                initHeroCarousel(events);
+            })
+            .catch(error => {
+                console.error('Error loading hero carousel:', error);
+                document.getElementById('hero-carousel').innerHTML = `
+                    <div class="absolute inset-0 flex items-center justify-center bg-gray-200">
+                        <p class="text-gray-500">Failed to load events</p>
+                    </div>
+                `;
+            });
+
         // Load recent events from the database
         fetch('/events')
             .then(response => response.json())
