@@ -36,6 +36,21 @@
             </a>
         </div>
 
+        <!-- Download Controls -->
+        <div id="download-controls" class="mb-6 flex items-center justify-between bg-white p-4 rounded-lg shadow-sm hidden">
+            <div class="flex items-center space-x-4">
+                <span id="selected-count" class="text-gray-700 font-medium">0 photos selected</span>
+                <button id="select-all-btn" class="text-indigo-600 hover:text-indigo-700 text-sm font-medium">Select All</button>
+                <button id="deselect-all-btn" class="text-gray-600 hover:text-gray-700 text-sm font-medium">Deselect All</button>
+            </div>
+            <button id="download-selected-btn" class="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed" disabled>
+                <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                </svg>
+                Download Selected
+            </button>
+        </div>
+
         <div class="border-t border-gray-200 pt-10">
             <h2 class="text-2xl font-bold text-gray-900 mb-6">Event Gallery</h2>
             <div id="event-photos-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -47,10 +62,55 @@
         </div>
     </main>
 
+    <!-- Full View Modal -->
+    <div id="fullview-modal" class="fixed inset-0 bg-black bg-opacity-90 z-50 hidden flex items-center justify-center">
+        <!-- Top Controls -->
+        <div class="absolute top-4 right-4 flex items-center space-x-3 z-10">
+            <button id="download-current-photo" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 flex items-center space-x-2 transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                </svg>
+                <span>Download</span>
+            </button>
+            <button id="close-modal" class="text-white hover:text-gray-300">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        
+        <!-- Navigation Buttons -->
+        <button id="prev-photo" class="absolute left-4 text-white hover:text-gray-300 z-10">
+            <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+            </svg>
+        </button>
+        <button id="next-photo" class="absolute right-4 text-white hover:text-gray-300 z-10">
+            <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+        </button>
+        
+        <!-- Image Display -->
+        <div class="max-w-7xl max-h-screen p-4">
+            <img id="fullview-image" src="" alt="Full view" class="max-w-full max-h-screen object-contain">
+        </div>
+        
+        <!-- Bottom Info -->
+        <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-white text-sm">
+            <span id="photo-counter"></span>
+        </div>
+    </div>
+
     <script>
+        let allPhotos = [];
+        let currentPhotoIndex = 0;
+        let selectedPhotos = new Set();
+        let eventId = null;
+
         document.addEventListener('DOMContentLoaded', async () => {
             const urlParams = new URLSearchParams(window.location.search);
-            const eventId = urlParams.get('event_id');
+            eventId = urlParams.get('event_id');
             const eventNameEl = document.getElementById('event-name');
             const eventDateEl = document.getElementById('event-date');
             const scanLink = document.getElementById('scan-face-link');
@@ -82,14 +142,45 @@
 
                     if (data.success && data.photos.length > 0) {
                         if (page === 1) {
-                           loadingMessage.style.display = 'none'; // Hide initial loading message
+                           loadingMessage.style.display = 'none';
+                           document.getElementById('download-controls').classList.remove('hidden');
                         }
                         
                         let html = '';
                         data.photos.forEach(photoUrl => {
-                            html += `<div class="aspect-w-1 aspect-h-1"><img src="${photoUrl}" class="w-full h-full object-cover rounded-lg shadow-md animate-fade-in" loading="lazy"></div>`;
+                            const photoIndex = allPhotos.length;
+                            const filename = photoUrl.split('/').pop();
+                            allPhotos.push({ url: photoUrl, filename });
+                            
+                            html += `
+                                <div class="relative group overflow-hidden rounded-lg shadow-md hover:shadow-lg transition-shadow animate-fade-in">
+                                    <!-- Checkbox -->
+                                    <div class="absolute top-2 left-2 z-10">
+                                        <input type="checkbox" 
+                                               class="photo-checkbox w-5 h-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                               data-photo-index="${photoIndex}"
+                                               data-photo-url="${photoUrl}"
+                                               data-filename="${filename}">
+                                    </div>
+                                    
+                                    <!-- Image -->
+                                    <img src="${photoUrl}" 
+                                         alt="Event photo" 
+                                         class="w-full h-64 object-cover cursor-pointer photo-image"
+                                         data-index="${photoIndex}"
+                                         loading="lazy">
+                                    
+                                    <!-- Hover overlay -->
+                                    <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                                        <span class="text-white text-sm">Click to view</span>
+                                    </div>
+                                </div>
+                            `;
                         });
                         grid.insertAdjacentHTML('beforeend', html);
+                        
+                        // Attach event listeners to new photos
+                        attachPhotoEventListeners();
                         
                         // Show or hide the "Load More" button
                         if (data.has_next) {
@@ -100,7 +191,7 @@
                         }
 
                     } else {
-                        if(page === 1) { // Only show this if it's the first page
+                        if(page === 1) {
                            loadingMessage.textContent = data.error || 'No photos have been processed for this event yet.';
                         }
                     }
@@ -133,9 +224,179 @@
             // Add click listener for the "Load More" button
             loadMoreBtn.addEventListener('click', () => fetchPhotos(currentPage));
 
+            // Setup control event listeners
+            setupControlListeners();
+
             // Initial load of the first page of photos
             fetchPhotos(currentPage);
         });
+
+        function attachPhotoEventListeners() {
+            // Photo click to open full view
+            document.querySelectorAll('.photo-image').forEach(img => {
+                if (!img.dataset.listenerAttached) {
+                    img.addEventListener('click', function() {
+                        currentPhotoIndex = parseInt(this.dataset.index);
+                        openFullView();
+                    });
+                    img.dataset.listenerAttached = 'true';
+                }
+            });
+
+            // Checkbox change
+            document.querySelectorAll('.photo-checkbox').forEach(checkbox => {
+                if (!checkbox.dataset.listenerAttached) {
+                    checkbox.addEventListener('change', function() {
+                        if (this.checked) {
+                            selectedPhotos.add(this.dataset.photoUrl);
+                        } else {
+                            selectedPhotos.delete(this.dataset.photoUrl);
+                        }
+                        updateSelectedCount();
+                    });
+                    checkbox.dataset.listenerAttached = 'true';
+                }
+            });
+        }
+
+        function setupControlListeners() {
+            // Select all button
+            document.getElementById('select-all-btn').addEventListener('click', () => {
+                document.querySelectorAll('.photo-checkbox').forEach(checkbox => {
+                    checkbox.checked = true;
+                    selectedPhotos.add(checkbox.dataset.photoUrl);
+                });
+                updateSelectedCount();
+            });
+
+            // Deselect all button
+            document.getElementById('deselect-all-btn').addEventListener('click', () => {
+                document.querySelectorAll('.photo-checkbox').forEach(checkbox => {
+                    checkbox.checked = false;
+                });
+                selectedPhotos.clear();
+                updateSelectedCount();
+            });
+
+            // Download selected button
+            document.getElementById('download-selected-btn').addEventListener('click', downloadSelected);
+
+            // Modal controls
+            document.getElementById('close-modal').addEventListener('click', closeFullView);
+            document.getElementById('prev-photo').addEventListener('click', showPrevPhoto);
+            document.getElementById('next-photo').addEventListener('click', showNextPhoto);
+            document.getElementById('download-current-photo').addEventListener('click', downloadCurrentPhoto);
+
+            // Keyboard navigation
+            document.addEventListener('keydown', (e) => {
+                const modal = document.getElementById('fullview-modal');
+                if (!modal.classList.contains('hidden')) {
+                    if (e.key === 'Escape') closeFullView();
+                    if (e.key === 'ArrowLeft') showPrevPhoto();
+                    if (e.key === 'ArrowRight') showNextPhoto();
+                }
+            });
+        }
+
+        function updateSelectedCount() {
+            const count = selectedPhotos.size;
+            document.getElementById('selected-count').textContent = `${count} photo${count !== 1 ? 's' : ''} selected`;
+            document.getElementById('download-selected-btn').disabled = count === 0;
+        }
+
+        function openFullView() {
+            const modal = document.getElementById('fullview-modal');
+            const img = document.getElementById('fullview-image');
+            const counter = document.getElementById('photo-counter');
+            
+            img.src = allPhotos[currentPhotoIndex].url;
+            counter.textContent = `${currentPhotoIndex + 1} / ${allPhotos.length}`;
+            modal.classList.remove('hidden');
+        }
+
+        function closeFullView() {
+            document.getElementById('fullview-modal').classList.add('hidden');
+        }
+
+        function showPrevPhoto() {
+            currentPhotoIndex = (currentPhotoIndex - 1 + allPhotos.length) % allPhotos.length;
+            openFullView();
+        }
+
+        function showNextPhoto() {
+            currentPhotoIndex = (currentPhotoIndex + 1) % allPhotos.length;
+            openFullView();
+        }
+
+        function downloadCurrentPhoto() {
+            const currentPhoto = allPhotos[currentPhotoIndex];
+            const link = document.createElement('a');
+            link.href = currentPhoto.url;
+            link.download = currentPhoto.filename.replace('watermarked_', '');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        async function downloadSelected() {
+            if (selectedPhotos.size === 0) return;
+
+            const downloadBtn = document.getElementById('download-selected-btn');
+            downloadBtn.disabled = true;
+            downloadBtn.innerHTML = '<svg class="w-5 h-5 inline mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>Downloading...';
+
+            try {
+                const photosToDownload = Array.from(selectedPhotos).map(url => {
+                    const filename = url.split('/').pop();
+                    return { url, filename };
+                });
+
+                if (photosToDownload.length === 1) {
+                    // Single photo download
+                    const photo = photosToDownload[0];
+                    const link = document.createElement('a');
+                    link.href = photo.url;
+                    link.download = photo.filename.replace('watermarked_', '');
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                } else {
+                    // Multiple photos - download via API
+                    const response = await fetch('/api/download_event_photos', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            event_id: eventId,
+                            photo_urls: photosToDownload.map(p => p.url)
+                        })
+                    });
+
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = `event_photos_${eventId}_${Date.now()}.zip`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        window.URL.revokeObjectURL(url);
+                    } else {
+                        throw new Error('Download failed');
+                    }
+                }
+
+                alert('Photos downloaded successfully!');
+            } catch (error) {
+                console.error('Download error:', error);
+                alert('Failed to download photos. Please try again.');
+            } finally {
+                downloadBtn.disabled = false;
+                downloadBtn.innerHTML = '<svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>Download Selected';
+            }
+        }
     </script>
     <style>
         @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }

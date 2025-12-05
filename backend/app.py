@@ -789,6 +789,146 @@ def get_private_photo(event_id, person_id, photo_type, filename):
     return send_from_directory(photo_path, filename)
 
 
+@app.route('/api/download_photos', methods=['POST'])
+@login_required
+def download_photos():
+    """
+    Download multiple photos as a ZIP file (for personal gallery)
+    """
+    try:
+        import zipfile
+        from flask import send_file
+        
+        data = request.get_json()
+        event_id = data.get('event_id')
+        person_id = data.get('person_id')
+        photos = data.get('photos', [])
+
+        if not all([event_id, person_id, photos]):
+            return jsonify({"success": False, "error": "Missing required parameters"}), 400
+
+        # Create a temporary ZIP file
+        zip_filename = f"photos_{event_id}_{person_id}_{uuid.uuid4().hex[:8]}.zip"
+        zip_path = os.path.join(app.config['PROCESSED_FOLDER'], zip_filename)
+
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for photo in photos:
+                filename = photo.get('filename')
+                photo_type = photo.get('photoType')
+                
+                # Remove watermarked_ prefix if present for the actual file
+                actual_filename = filename.replace('watermarked_', '') if filename.startswith('watermarked_') else filename
+                
+                photo_path = os.path.join(
+                    app.config['PROCESSED_FOLDER'],
+                    event_id,
+                    person_id,
+                    photo_type,
+                    filename
+                )
+
+                if os.path.exists(photo_path):
+                    # Add to ZIP with a clean filename
+                    zipf.write(photo_path, arcname=actual_filename)
+
+        # Send the ZIP file
+        response = send_file(
+            zip_path,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=f"picme_photos_{event_id}.zip"
+        )
+
+        # Schedule cleanup of the ZIP file after sending
+        def cleanup_zip():
+            import time
+            time.sleep(5)  # Wait 5 seconds before cleanup
+            try:
+                if os.path.exists(zip_path):
+                    os.remove(zip_path)
+                    print(f"Cleaned up temporary ZIP: {zip_path}")
+            except Exception as e:
+                print(f"Error cleaning up ZIP: {e}")
+
+        threading.Thread(target=cleanup_zip).start()
+
+        return response
+
+    except Exception as e:
+        print(f"Error creating ZIP download: {e}")
+        return jsonify({"success": False, "error": "Failed to create download"}), 500
+
+
+@app.route('/api/download_event_photos', methods=['POST'])
+@login_required
+def download_event_photos():
+    """
+    Download multiple event photos as a ZIP file (for event detail page)
+    """
+    try:
+        import zipfile
+        from flask import send_file
+        
+        data = request.get_json()
+        event_id = data.get('event_id')
+        photo_urls = data.get('photo_urls', [])
+
+        if not all([event_id, photo_urls]):
+            return jsonify({"success": False, "error": "Missing required parameters"}), 400
+
+        # Create a temporary ZIP file
+        zip_filename = f"event_photos_{event_id}_{uuid.uuid4().hex[:8]}.zip"
+        zip_path = os.path.join(app.config['PROCESSED_FOLDER'], zip_filename)
+
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for photo_url in photo_urls:
+                # Parse the URL to get the file path
+                # URL format: /photos/event_id/all/filename
+                parts = photo_url.split('/')
+                if len(parts) >= 4:
+                    filename = parts[-1]
+                    # Remove watermarked_ prefix for cleaner filenames
+                    clean_filename = filename.replace('watermarked_', '')
+                    
+                    # Find the actual file in the processed folder
+                    event_dir = os.path.join(app.config['PROCESSED_FOLDER'], event_id)
+                    if os.path.exists(event_dir):
+                        for person_id in os.listdir(event_dir):
+                            group_dir = os.path.join(event_dir, person_id, "group")
+                            photo_path = os.path.join(group_dir, filename)
+                            if os.path.exists(photo_path):
+                                # Add to ZIP with clean filename
+                                zipf.write(photo_path, arcname=clean_filename)
+                                break
+
+        # Send the ZIP file
+        response = send_file(
+            zip_path,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=f"event_photos_{event_id}.zip"
+        )
+
+        # Schedule cleanup of the ZIP file after sending
+        def cleanup_zip():
+            import time
+            time.sleep(5)  # Wait 5 seconds before cleanup
+            try:
+                if os.path.exists(zip_path):
+                    os.remove(zip_path)
+                    print(f"Cleaned up temporary ZIP: {zip_path}")
+            except Exception as e:
+                print(f"Error cleaning up ZIP: {e}")
+
+        threading.Thread(target=cleanup_zip).start()
+
+        return response
+
+    except Exception as e:
+        print(f"Error creating event photos ZIP download: {e}")
+        return jsonify({"success": False, "error": "Failed to create download"}), 500
+
+
 # --- ADMIN PHOTO ACCESS ROUTES ---
 @app.route('/api/admin/events/<event_id>/all-photos', methods=['GET'])
 def get_admin_all_photos(event_id):
