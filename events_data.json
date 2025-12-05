@@ -1,31 +1,17 @@
 [
   {
-    "id": "event_c9cff2be",
-    "name": "Agones",
-    "location": "RNSIT",
-    "date": "2025-11-20",
-    "category": "Sports",
-    "image": "/static/images/default_event.jpg",
-    "photos_count": 16,
-    "qr_code": "/api/qr_code/event_c9cff2be",
-    "created_by_admin_id": 1,
-    "created_by_user_id": null,
-    "created_at": "2025-11-30T18:07:42.002049",
-    "sample_photos": []
-  },
-  {
-    "id": "event_d89e901e",
-    "name": "college fest",
+    "id": "event_52fee35b",
+    "name": "tarana",
     "location": "RNSIT campus, bengaluru",
     "date": "2025-12-05",
-    "category": "Festival",
-    "image": "/api/events/event_d89e901e/thumbnail",
-    "thumbnail_filename": "thumbnail_9385b9ad.jpeg",
-    "photos_count": 0,
-    "qr_code": "/api/qr_code/event_d89e901e",
-    "created_by_admin_id": 3,
+    "category": "Party",
+    "image": "/api/events/event_52fee35b/thumbnail",
+    "thumbnail_filename": "thumbnail_d3dcd5aa.jpeg",
+    "photos_count": 12,
+    "qr_code": "/api/qr_code/event_52fee35b",
+    "created_by_admin_id": 4,
     "created_by_user_id": null,
-    "created_at": "2025-12-05T22:52:55.115601",
+    "created_at": "2025-12-05T23:24:43.363416",
     "sample_photos": []
   }
 ]

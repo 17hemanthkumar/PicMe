@@ -12,7 +12,7 @@ Replaced the fake "Summer Beats" festival placeholder on the index page with a d
 <div class="relative rounded-2xl overflow-hidden shadow-2xl">
     <img src="..." alt="People at a concert enjoying music">
     <div class="absolute bottom-0 left-0 p-6">
-        <p class="text-sm font-medium">Music Festival 2023</p>
+        <p class="text-sm font-medium">Music Festival 2025</p>
         <h3 class="text-xl font-bold">Summer Beats</h3>
         <p class="text-sm">1,245 photos available</p>
     </div>

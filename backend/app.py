@@ -168,6 +168,13 @@ def serve_index():
     return render_template('index.html')
 
 
+@app.route('/picme.jpeg')
+def serve_logo():
+    """Serve the PicMe logo image"""
+    frontend_dir = os.path.join(BASE_DIR, '..', 'frontend')
+    return send_from_directory(frontend_dir, 'picme.jpeg')
+
+
 @app.route('/login')
 def serve_login_page():
     return render_template('login.html')
