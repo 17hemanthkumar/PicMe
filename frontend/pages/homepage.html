@@ -32,7 +32,7 @@
                     <a href="/event_discovery" class="text-gray-600 hover:text-indigo-600 transition-colors duration-200">Events</a>
                     <a href="/biometric_authentication_portal" class="text-gray-600 hover:text-indigo-600 transition-colors duration-200">Scan Face</a>
                     <a href="/personal_photo_gallery" class="text-gray-600 hover:text-indigo-600 transition-colors duration-200">My Photos</a>
-                    <a href="/download_center" class="text-gray-600 hover:text-indigo-600 transition-colors duration-200">Downloads</a>
+                    <a href="/download_page" class="text-gray-600 hover:text-indigo-600 transition-colors duration-200">Downloads</a>
                     {% if session.get('user_type') == 'organizer' %}
                     <a href="/event_organizer" class="text-gray-600 hover:text-indigo-600 transition-colors duration-200">For Organizers</a>
                     {% endif %}
@@ -67,7 +67,7 @@
                 <a href="/event_discovery" class="block px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-indigo-600 hover:bg-gray-50">Events</a>
                 <a href="/biometric_authentication_portal" class="block px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-indigo-600 hover:bg-gray-50">Scan Face</a>
                 <a href="/personal_photo_gallery" class="block px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-indigo-600 hover:bg-gray-50">My Photos</a>
-                <a href="/download_center" class="block px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-indigo-600 hover:bg-gray-50">Downloads</a>
+                <a href="/download_page" class="block px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-indigo-600 hover:bg-gray-50">Downloads</a>
                 {% if session.get('user_type') == 'organizer' %}
                 <a href="/event_organizer" class="block px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-indigo-600 hover:bg-gray-50">For Organizers</a>
                 {% endif %}
@@ -173,6 +173,27 @@
         </div>
     </section>
 
+    <!-- My Downloads Section -->
+    <section class="py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto bg-gray-50">
+        <div class="flex justify-between items-center mb-8">
+            <h2 class="text-3xl font-bold text-gray-900">My Downloads</h2>
+            <a href="/download_page" class="text-indigo-600 hover:text-indigo-800 font-medium">View All Downloads</a>
+        </div>
+        
+        <div id="downloadsGrid" class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <!-- Downloads will be loaded dynamically -->
+            <div class="col-span-full text-center py-12">
+                <div class="flex flex-col items-center">
+                    <svg class="w-16 h-16 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"></path>
+                    </svg>
+                    <p class="text-gray-500 text-lg font-medium">No downloads yet</p>
+                    <p class="text-gray-400 text-sm mt-2">Photos you download will appear here</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <script>
         // Hero Carousel
         let heroEvents = [];
@@ -197,6 +218,9 @@
 
             heroEvents = events.slice(-5).reverse(); // Get up to 5 most recent events
             
+            // Debug: Log the events to verify order
+            console.log('Hero Events:', heroEvents.map(e => ({ name: e.name, id: e.id })));
+            
             // Create slides
             carousel.innerHTML = heroEvents.map((event, index) => {
                 const eventDate = new Date(event.date).toLocaleDateString('en-US', { 
@@ -205,8 +229,14 @@
                     day: 'numeric' 
                 });
                 
-                return `
-                    <div class="carousel-slide absolute inset-0 transition-opacity duration-1000 ${index === 0 ? 'opacity-100' : 'opacity-0'}" data-slide="${index}">
+                // Store event ID in data attribute for proper navigation
+                const eventId = event.id;
+                console.log(`Creating slide ${index}: ${event.name} with ID: ${eventId}`);
+                
+                const slideHtml = `
+                    <div class="carousel-slide absolute inset-0 transition-opacity duration-1000 ${index === 0 ? 'opacity-100' : 'opacity-0'}" 
+                         data-slide="${index}" 
+                         data-event-id="${eventId}">
                         <img src="${event.image || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=1180'}" 
                              alt="${event.name}" 
                              class="w-full h-full object-cover"
@@ -216,12 +246,11 @@
                             <p class="text-sm font-medium">${event.category || 'Event'} • ${eventDate}</p>
                             <h3 class="text-2xl font-bold mb-1">${event.name}</h3>
                             <p class="text-sm mb-3">${event.photos_count || 0} photos available</p>
-                            <a href="/event_detail?event_id=${event.id}" class="inline-block px-4 py-2 bg-white/20 backdrop-blur-sm hover:bg-white/30 rounded-lg text-sm font-medium transition-colors">
-                                View Event →
-                            </a>
                         </div>
                     </div>
                 `;
+                console.log(`Slide ${index} HTML contains event_id=${eventId} for ${event.name}`);
+                return slideHtml;
             }).join('');
             
             // Create indicators
@@ -388,7 +417,7 @@
                 <ul class="space-y-2">
                     <li><a href="/biometric_authentication_portal" class="text-gray-400 hover:text-white">Face Recognition</a></li>
                     <li><a href="/event_discovery" class="text-gray-400 hover:text-white">Event Discovery</a></li>
-                    <li><a href="/download_center" class="text-gray-400 hover:text-white">Photo Downloads</a></li>
+                    <li><a href="/download_page" class="text-gray-400 hover:text-white">Photo Downloads</a></li>
                 </ul>
             </div>
             

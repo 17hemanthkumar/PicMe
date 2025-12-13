@@ -1,17 +1,17 @@
 [
   {
-    "id": "event_52fee35b",
-    "name": "tarana",
-    "location": "RNSIT campus, bengaluru",
-    "date": "2025-12-05",
-    "category": "Party",
-    "image": "/api/events/event_52fee35b/thumbnail",
-    "thumbnail_filename": "thumbnail_d3dcd5aa.jpeg",
-    "photos_count": 12,
-    "qr_code": "/api/qr_code/event_52fee35b",
+    "id": "event_d7511eb5",
+    "name": "Naming ceremony ",
+    "location": "bengaluru",
+    "date": "2024-12-11",
+    "category": "Festival",
+    "image": "/api/events/event_d7511eb5/thumbnail",
+    "thumbnail_filename": "thumbnail_4fa41614.jpeg",
+    "photos_count": 5,
+    "qr_code": "/api/qr_code/event_d7511eb5",
     "created_by_admin_id": 4,
     "created_by_user_id": null,
-    "created_at": "2025-12-05T23:24:43.363416",
+    "created_at": "2025-12-06T10:56:45.289732",
     "sample_photos": []
   }
 ]

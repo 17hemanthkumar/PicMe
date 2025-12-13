@@ -1,0 +1,1436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Downloads - PicMe</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation Header -->
+    <nav class="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-200 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <!-- Logo -->
+                <a href="/homepage" class="flex items-center space-x-2">
+                    <img src="/picme.jpeg" alt="PicMe Logo" class="h-12 w-auto" style="max-height: 48px;">
+                </a>
+                
+                <!-- Mobile Menu Button -->
+                <button id="mobile-menu-btn" class="md:hidden text-gray-600 hover:text-indigo-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                    </svg>
+                </button>
+                
+                <!-- Desktop Navigation -->
+                <div class="hidden md:flex items-center space-x-8">
+                    <a href="/homepage" class="text-gray-600 hover:text-indigo-600">Home</a>
+                    <a href="/event_discovery" class="text-gray-600 hover:text-indigo-600">Events</a>
+                    <a href="/personal_photo_gallery" class="text-gray-600 hover:text-indigo-600">My Photos</a>
+                    <a href="/download_page" class="text-indigo-600 font-medium">Downloads</a>
+                </div>
+                
+                <!-- User Authentication -->
+                <div class="hidden md:flex items-center space-x-4">
+                    <span class="text-gray-600 text-sm font-medium">Welcome, {{ session.get('user_email', 'Guest') }}</span>
+                    <a href="/logout" class="px-4 py-2 rounded-md text-sm font-medium text-red-600 border border-red-600 hover:bg-red-50">Logout</a>
+                </div>
+            </div>
+            
+            <!-- Mobile Menu -->
+            <div id="mobile-menu" class="hidden md:hidden pb-4">
+                <div class="flex flex-col space-y-3">
+                    <a href="/homepage" class="text-gray-600 hover:text-indigo-600 px-2 py-1">Home</a>
+                    <a href="/event_discovery" class="text-gray-600 hover:text-indigo-600 px-2 py-1">Events</a>
+                    <a href="/personal_photo_gallery" class="text-gray-600 hover:text-indigo-600 px-2 py-1">My Photos</a>
+                    <a href="/download_page" class="text-indigo-600 font-medium px-2 py-1">Downloads</a>
+                    <div class="border-t border-gray-200 pt-3">
+                        <span class="text-gray-600 text-sm font-medium px-2">{{ session.get('user_email', 'Guest') }}</span>
+                        <a href="/logout" class="block mt-2 px-4 py-2 rounded-md text-sm font-medium text-red-600 border border-red-600 hover:bg-red-50 text-center">Logout</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="pt-24 pb-12 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <!-- Page Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl sm:text-4xl font-bold text-gray-900">Your Downloads</h1>
+            <p class="text-base sm:text-lg text-gray-600 mt-2">Manage and download all your photos from events in one place.</p>
+        </div>
+
+        <!-- Filter Controls Section -->
+        <div class="mb-6 bg-white p-4 rounded-lg shadow-sm">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-3 sm:space-y-0">
+                <div class="flex-1">
+                    <label for="event-filter" class="block text-sm font-medium text-gray-700 mb-1">Filter by Event</label>
+                    <select id="event-filter" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="all">All Events</option>
+                        <!-- Event options will be populated dynamically -->
+                    </select>
+                </div>
+                <div class="flex-1">
+                    <label for="photo-type-filter" class="block text-sm font-medium text-gray-700 mb-1">Photo Type</label>
+                    <select id="photo-type-filter" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="all">All Photos</option>
+                        <option value="individual">Individual Photos</option>
+                        <option value="group">Group Photos</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Download Controls Section -->
+        <div id="download-controls" class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between bg-white p-4 rounded-lg shadow-sm space-y-3 sm:space-y-0 hidden">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-2 sm:space-y-0">
+                <span id="selected-count" class="text-gray-700 font-medium text-sm sm:text-base">0 photos selected</span>
+                <button id="deselect-all-btn" class="text-gray-600 hover:text-gray-700 text-sm font-medium text-left sm:text-center">Deselect All</button>
+            </div>
+            <button id="download-selected-btn" class="w-full sm:w-auto px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors" disabled>
+                <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                </svg>
+                Download Selected
+            </button>
+        </div>
+
+        <!-- Events and Photos Section -->
+        <div id="events-container" class="space-y-6">
+            <!-- Loading state -->
+            <div id="loading-state" class="text-center py-12">
+                <svg class="w-12 h-12 animate-spin text-indigo-600 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                <p class="text-gray-600 mt-4">Loading your photos...</p>
+            </div>
+
+            <!-- Empty state -->
+            <div id="empty-state" class="hidden text-center py-12 bg-white rounded-lg shadow-sm">
+                <svg class="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+                <h3 class="text-xl font-semibold text-gray-900 mb-2">No Photos Available</h3>
+                <p class="text-gray-600 mb-4">You don't have any photos yet. Scan your face at an event to get started!</p>
+                <a href="/biometric_authentication_portal" class="inline-block px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Scan Your Face</a>
+            </div>
+
+            <!-- Event cards will be populated here -->
+        </div>
+
+        <!-- Download History Section -->
+        <div class="mt-12">
+            <h2 class="text-xl sm:text-2xl font-bold text-gray-900 mb-4">Download History</h2>
+            <div id="download-history" class="bg-white rounded-lg shadow-sm p-4 sm:p-6">
+                <!-- Empty history state -->
+                <div id="empty-history-state" class="text-center py-8 text-gray-500">
+                    <svg class="w-12 h-12 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <p class="text-sm sm:text-base">No download history yet</p>
+                </div>
+                
+                <!-- History entries will be populated here -->
+                <div id="history-entries" class="hidden space-y-3">
+                    <!-- History items will be added dynamically -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Full-Size Preview Modal -->
+    <div id="fullview-modal" class="fixed inset-0 bg-black bg-opacity-90 z-50 hidden flex items-center justify-center">
+        <!-- Top Controls -->
+        <div class="absolute top-2 sm:top-4 right-2 sm:right-4 flex items-center space-x-2 sm:space-x-3 z-10">
+            <button id="download-current-photo" class="px-3 py-2 sm:px-4 sm:py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 flex items-center space-x-1 sm:space-x-2 transition-colors text-sm sm:text-base">
+                <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                </svg>
+                <span class="hidden sm:inline">Download</span>
+            </button>
+            <button id="close-modal" class="text-white hover:text-gray-300">
+                <svg class="w-6 h-6 sm:w-8 sm:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        
+        <!-- Navigation Buttons -->
+        <button id="prev-photo" class="absolute left-2 sm:left-4 text-white hover:text-gray-300 z-10">
+            <svg class="w-8 h-8 sm:w-10 sm:h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+            </svg>
+        </button>
+        <button id="next-photo" class="absolute right-2 sm:right-4 text-white hover:text-gray-300 z-10">
+            <svg class="w-8 h-8 sm:w-10 sm:h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+        </button>
+        
+        <!-- Image Display -->
+        <div class="max-w-7xl max-h-screen p-2 sm:p-4">
+            <img id="fullview-image" src="" alt="Full view" class="max-w-full max-h-screen object-contain">
+        </div>
+        
+        <!-- Bottom Info -->
+        <div class="absolute bottom-2 sm:bottom-4 left-1/2 transform -translate-x-1/2 text-white text-xs sm:text-sm">
+            <span id="photo-counter"></span>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let allEvents = [];
+        let allPhotos = [];
+        let filteredPhotos = [];
+        let selectedPhotos = new Set();
+        let currentPhotoIndex = 0;
+        let filters = { event: 'all', type: 'all' };
+
+        // Global error handler for unhandled promise rejections
+        window.addEventListener('unhandledrejection', (event) => {
+            console.error('Unhandled promise rejection:', event.reason);
+            showMessage('An unexpected error occurred. Please refresh the page.', 'error');
+            event.preventDefault();
+        });
+
+        // Global error handler
+        window.addEventListener('error', (event) => {
+            console.error('Global error:', event.error);
+            // Don't show message for script loading errors
+            if (!event.filename || event.filename.includes('download_page')) {
+                showMessage('An unexpected error occurred. Please refresh the page.', 'error');
+            }
+        });
+        
+        // Monitor online/offline status
+        window.addEventListener('online', () => {
+            showMessage('Connection restored. You can continue downloading.', 'success', 3000);
+        });
+        
+        window.addEventListener('offline', () => {
+            showMessage('You are offline. Please check your internet connection.', 'error', 10000);
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initializePage();
+        });
+
+        async function initializePage() {
+            // Setup mobile menu toggle
+            setupMobileMenu();
+            
+            // Load download history
+            loadDownloadHistory();
+            
+            // Load user photos
+            await loadUserPhotos();
+            
+            // Setup event listeners
+            setupEventListeners();
+        }
+
+        function setupMobileMenu() {
+            const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+            const mobileMenu = document.getElementById('mobile-menu');
+            
+            mobileMenuBtn.addEventListener('click', () => {
+                mobileMenu.classList.toggle('hidden');
+            });
+        }
+
+        async function loadUserPhotos(retryCount = 0) {
+            const loadingState = document.getElementById('loading-state');
+            const emptyState = document.getElementById('empty-state');
+            const eventsContainer = document.getElementById('events-container');
+            const MAX_RETRIES = 2;
+            
+            try {
+                // Show loading state
+                loadingState.classList.remove('hidden');
+                emptyState.classList.add('hidden');
+                
+                // Fetch user photos from API with timeout
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+                
+                const response = await fetch('/api/user_photos', {
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                // Handle authentication errors
+                if (response.status === 401 || response.status === 403) {
+                    // Session expired - redirect to login
+                    showMessage('Your session has expired. Please log in again.', 'error');
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 2000);
+                    return;
+                }
+                
+                // Handle server errors
+                if (response.status === 500) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || 'Server error occurred. Please try again later.');
+                }
+                
+                // Handle service unavailable
+                if (response.status === 503) {
+                    throw new Error('Service temporarily unavailable. Please try again in a few moments.');
+                }
+                
+                // Handle other HTTP errors
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // Hide loading state
+                loadingState.classList.add('hidden');
+                
+                // Handle no person_id case
+                if (!data.success && data.error_code === 'NO_PERSON_ID') {
+                    eventsContainer.innerHTML = `
+                        <div class="text-center py-12 bg-white rounded-lg shadow-sm">
+                            <svg class="w-16 h-16 text-yellow-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                            </svg>
+                            <h3 class="text-xl font-semibold text-gray-900 mb-2">Biometric Authentication Required</h3>
+                            <p class="text-gray-600 mb-4">Please scan your face at an event to access your photos.</p>
+                            <a href="/biometric_authentication_portal" class="inline-block px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Scan Your Face</a>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                if (!data.success || !data.events || data.events.length === 0) {
+                    // Show empty state
+                    emptyState.classList.remove('hidden');
+                    return;
+                }
+                
+                // Store events and photos data with validation
+                allEvents = Array.isArray(data.events) ? data.events : [];
+                allPhotos = [];
+                
+                // Flatten all photos for easier filtering with validation
+                allEvents.forEach(event => {
+                    // Validate event object
+                    if (!event || typeof event !== 'object') {
+                        console.warn('Invalid event object:', event);
+                        return;
+                    }
+                    
+                    // Validate required event fields
+                    if (!event.event_id || !event.event_name) {
+                        console.warn('Event missing required fields:', event);
+                        return;
+                    }
+                    
+                    if (Array.isArray(event.individual_photos)) {
+                        event.individual_photos.forEach(photo => {
+                            // Validate photo object
+                            if (!photo || !photo.filename || !photo.url) {
+                                console.warn('Invalid photo object:', photo);
+                                return;
+                            }
+                            
+                            allPhotos.push({
+                                ...photo,
+                                eventId: event.event_id,
+                                eventName: event.event_name,
+                                photoType: 'individual',
+                                personId: event.person_id
+                            });
+                        });
+                    }
+                    if (Array.isArray(event.group_photos)) {
+                        event.group_photos.forEach(photo => {
+                            // Validate photo object
+                            if (!photo || !photo.filename || !photo.url) {
+                                console.warn('Invalid photo object:', photo);
+                                return;
+                            }
+                            
+                            allPhotos.push({
+                                ...photo,
+                                eventId: event.event_id,
+                                eventName: event.event_name,
+                                photoType: 'group',
+                                personId: event.person_id
+                            });
+                        });
+                    }
+                });
+                
+                filteredPhotos = [...allPhotos];
+                
+                // Populate event filter dropdown
+                populateEventFilter();
+                
+                // Render event cards
+                renderEventCards();
+                
+            } catch (error) {
+                console.error('Error loading user photos:', error);
+                loadingState.classList.add('hidden');
+                
+                // Handle network timeout
+                if (error.name === 'AbortError') {
+                    if (retryCount < MAX_RETRIES) {
+                        showMessage(`Request timed out. Retrying... (${retryCount + 1}/${MAX_RETRIES})`, 'error');
+                        setTimeout(() => loadUserPhotos(retryCount + 1), 2000);
+                        return;
+                    }
+                    eventsContainer.innerHTML = `
+                        <div class="text-center py-12 bg-white rounded-lg shadow-sm">
+                            <svg class="w-16 h-16 text-red-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <h3 class="text-xl font-semibold text-gray-900 mb-2">Connection Timeout</h3>
+                            <p class="text-gray-600 mb-4">The request took too long. Please check your connection and try again.</p>
+                            <button onclick="location.reload()" class="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Retry</button>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // Handle network errors with retry
+                if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                    if (retryCount < MAX_RETRIES) {
+                        showMessage(`Network error. Retrying... (${retryCount + 1}/${MAX_RETRIES})`, 'error');
+                        setTimeout(() => loadUserPhotos(retryCount + 1), 2000);
+                        return;
+                    }
+                    eventsContainer.innerHTML = `
+                        <div class="text-center py-12 bg-white rounded-lg shadow-sm">
+                            <svg class="w-16 h-16 text-red-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414"/>
+                            </svg>
+                            <h3 class="text-xl font-semibold text-gray-900 mb-2">Network Error</h3>
+                            <p class="text-gray-600 mb-4">Unable to connect to the server. Please check your internet connection.</p>
+                            <button onclick="location.reload()" class="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Retry</button>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // Show generic error message with retry
+                eventsContainer.innerHTML = `
+                    <div class="text-center py-12 bg-white rounded-lg shadow-sm">
+                        <svg class="w-16 h-16 text-red-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <h3 class="text-xl font-semibold text-gray-900 mb-2">Error Loading Photos</h3>
+                        <p class="text-gray-600 mb-4">${escapeHtml(error.message || 'We couldn\'t load your photos. Please try again.')}</p>
+                        <button onclick="location.reload()" class="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Retry</button>
+                    </div>
+                `;
+            }
+        }
+        
+        function populateEventFilter() {
+            const eventFilter = document.getElementById('event-filter');
+            
+            // Clear existing options except "All Events"
+            eventFilter.innerHTML = '<option value="all">All Events</option>';
+            
+            // Add option for each event
+            allEvents.forEach(event => {
+                const option = document.createElement('option');
+                option.value = event.event_id;
+                option.textContent = event.event_name;
+                eventFilter.appendChild(option);
+            });
+        }
+        
+        function renderEventCards() {
+            const eventsContainer = document.getElementById('events-container');
+            
+            // Clear existing content
+            eventsContainer.innerHTML = '';
+            
+            // Group filtered photos by event
+            const eventGroups = {};
+            filteredPhotos.forEach(photo => {
+                if (!eventGroups[photo.eventId]) {
+                    eventGroups[photo.eventId] = [];
+                }
+                eventGroups[photo.eventId].push(photo);
+            });
+            
+            // Render each event card
+            allEvents.forEach(event => {
+                const eventPhotos = eventGroups[event.event_id] || [];
+                
+                // Skip events with no photos (after filtering)
+                if (eventPhotos.length === 0) return;
+                
+                const eventCard = createEventCard(event, eventPhotos);
+                eventsContainer.appendChild(eventCard);
+            });
+            
+            // If no events to display after filtering
+            if (eventsContainer.children.length === 0) {
+                eventsContainer.innerHTML = `
+                    <div class="text-center py-12 bg-white rounded-lg shadow-sm">
+                        <svg class="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                        <h3 class="text-xl font-semibold text-gray-900 mb-2">No Photos Match Your Filters</h3>
+                        <p class="text-gray-600">Try adjusting your filters to see more photos.</p>
+                    </div>
+                `;
+            }
+        }
+        
+        function createEventCard(event, eventPhotos) {
+            // Validate inputs
+            if (!event || !event.event_id || !Array.isArray(eventPhotos)) {
+                console.error('Invalid event or eventPhotos:', event, eventPhotos);
+                return document.createElement('div'); // Return empty div
+            }
+            
+            const card = document.createElement('div');
+            card.className = 'bg-white rounded-lg shadow-sm overflow-hidden';
+            card.dataset.eventId = event.event_id;
+            
+            // Format date with error handling
+            let eventDate = 'Date unknown';
+            try {
+                const date = new Date(event.event_date);
+                if (!isNaN(date.getTime())) {
+                    eventDate = date.toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                    });
+                }
+            } catch (e) {
+                console.error('Error formatting date:', e);
+            }
+            
+            // Count individual and group photos
+            const individualCount = eventPhotos.filter(p => p.photoType === 'individual').length;
+            const groupCount = eventPhotos.filter(p => p.photoType === 'group').length;
+            
+            card.innerHTML = `
+                <div class="event-header p-3 sm:p-4 cursor-pointer hover:bg-gray-50 transition-colors" onclick="toggleEventExpand('${event.event_id}')">
+                    <div class="flex justify-between items-start">
+                        <div class="flex-1">
+                            <h3 class="text-lg sm:text-xl font-semibold text-gray-900">${escapeHtml(event.event_name)}</h3>
+                            <div class="mt-2 space-y-1">
+                                <p class="text-xs sm:text-sm text-gray-600">
+                                    <svg class="w-3 h-3 sm:w-4 sm:h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                    </svg>
+                                    ${eventDate}
+                                </p>
+                                <p class="text-xs sm:text-sm text-gray-600">
+                                    <svg class="w-3 h-3 sm:w-4 sm:h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                    </svg>
+                                    ${escapeHtml(event.event_location)}
+                                </p>
+                                <p class="text-xs sm:text-sm text-gray-600">
+                                    <svg class="w-3 h-3 sm:w-4 sm:h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                    </svg>
+                                    ${eventPhotos.length} photo${eventPhotos.length !== 1 ? 's' : ''} (${individualCount} individual, ${groupCount} group)
+                                </p>
+                            </div>
+                        </div>
+                        <div class="ml-2 sm:ml-4">
+                            <svg class="w-5 h-5 sm:w-6 sm:h-6 text-gray-400 transform transition-transform event-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <button class="select-event-btn px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-indigo-600 border border-indigo-600 rounded-md hover:bg-indigo-50 transition-colors w-full sm:w-auto" onclick="event.stopPropagation(); selectAllInEvent('${event.event_id}')">
+                            Select All in Event
+                        </button>
+                    </div>
+                </div>
+                <div class="event-photos hidden p-3 sm:p-4 pt-0">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                        ${renderPhotoGrid(eventPhotos)}
+                    </div>
+                </div>
+            `;
+            
+            return card;
+        }
+        
+        function renderPhotoGrid(photos) {
+            return photos.map(photo => {
+                const photoId = `${photo.eventId}_${photo.filename}`;
+                const isSelected = selectedPhotos.has(photoId);
+                
+                return `
+                    <div class="photo-card relative group">
+                        <div class="relative aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                            <img src="${escapeHtml(photo.url)}" 
+                                 alt="${escapeHtml(photo.filename)}" 
+                                 class="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                                 onclick="openFullView('${photoId}')"
+                                 onerror="handleImageError(this)"
+                                 loading="lazy">
+                            
+                            <!-- Checkbox overlay -->
+                            <div class="absolute top-2 left-2 z-10">
+                                <input type="checkbox" 
+                                       id="checkbox-${photoId}"
+                                       class="photo-checkbox w-5 h-5 rounded border-2 border-white shadow-lg cursor-pointer"
+                                       ${isSelected ? 'checked' : ''}
+                                       onchange="togglePhotoSelection('${photoId}', this.checked)">
+                            </div>
+                            
+                            <!-- Photo type badge -->
+                            <div class="absolute top-2 right-2 z-10">
+                                <span class="px-2 py-1 text-xs font-medium rounded ${photo.photoType === 'individual' ? 'bg-blue-500' : 'bg-green-500'} text-white">
+                                    ${photo.photoType === 'individual' ? 'Individual' : 'Group'}
+                                </span>
+                            </div>
+                        </div>
+                        <p class="mt-2 text-xs text-gray-600 truncate" title="${escapeHtml(photo.filename)}">
+                            ${escapeHtml(photo.filename)}
+                        </p>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function toggleEventExpand(eventId) {
+            const card = document.querySelector(`[data-event-id="${eventId}"]`);
+            const photosSection = card.querySelector('.event-photos');
+            const chevron = card.querySelector('.event-chevron');
+            
+            photosSection.classList.toggle('hidden');
+            chevron.classList.toggle('rotate-180');
+        }
+        
+        function selectAllInEvent(eventId) {
+            const eventPhotos = filteredPhotos.filter(p => p.eventId === eventId);
+            
+            eventPhotos.forEach(photo => {
+                const photoId = `${photo.eventId}_${photo.filename}`;
+                selectedPhotos.add(photoId);
+                
+                // Update checkbox
+                const checkbox = document.getElementById(`checkbox-${photoId}`);
+                if (checkbox) checkbox.checked = true;
+            });
+            
+            updateSelectionUI();
+        }
+        
+        function togglePhotoSelection(photoId, isSelected) {
+            if (isSelected) {
+                selectedPhotos.add(photoId);
+            } else {
+                selectedPhotos.delete(photoId);
+            }
+            
+            updateSelectionUI();
+        }
+        
+        function updateSelectionUI() {
+            const selectedCount = selectedPhotos.size;
+            const downloadControls = document.getElementById('download-controls');
+            const selectedCountSpan = document.getElementById('selected-count');
+            const downloadBtn = document.getElementById('download-selected-btn');
+            
+            // Update count display
+            selectedCountSpan.textContent = `${selectedCount} photo${selectedCount !== 1 ? 's' : ''} selected`;
+            
+            // Show/hide download controls
+            if (selectedCount > 0) {
+                downloadControls.classList.remove('hidden');
+                downloadBtn.disabled = false;
+            } else {
+                downloadControls.classList.add('hidden');
+                downloadBtn.disabled = true;
+            }
+        }
+        
+        function openFullView(photoId) {
+            // Validate photoId
+            if (!photoId || typeof photoId !== 'string') {
+                console.error('Invalid photoId:', photoId);
+                showMessage('Unable to open photo preview.', 'error');
+                return;
+            }
+            
+            // Find the photo in filteredPhotos
+            const photoIndex = filteredPhotos.findIndex(p => `${p.eventId}_${p.filename}` === photoId);
+            
+            if (photoIndex === -1) {
+                console.error('Photo not found:', photoId);
+                showMessage('Photo not found. It may have been removed.', 'error');
+                return;
+            }
+            
+            // Set current photo index
+            currentPhotoIndex = photoIndex;
+            
+            // Get the photo data
+            const photo = filteredPhotos[currentPhotoIndex];
+            
+            // Validate photo object
+            if (!photo || !photo.url) {
+                console.error('Invalid photo object:', photo);
+                showMessage('Unable to load photo.', 'error');
+                return;
+            }
+            
+            // Update modal image
+            const fullviewImage = document.getElementById('fullview-image');
+            fullviewImage.src = photo.url;
+            fullviewImage.alt = photo.filename || 'Photo';
+            
+            // Add error handler for modal image
+            fullviewImage.onerror = () => {
+                showMessage('Failed to load full-size image.', 'error');
+                closeFullView();
+            };
+            
+            // Update photo counter
+            const photoCounter = document.getElementById('photo-counter');
+            photoCounter.textContent = `${currentPhotoIndex + 1} / ${filteredPhotos.length}`;
+            
+            // Show modal
+            const modal = document.getElementById('fullview-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            
+            // Update navigation button states
+            updateNavigationButtons();
+        }
+        
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = String(text);
+            return div.innerHTML;
+        }
+        
+        function handleImageError(img) {
+            // Replace broken image with placeholder
+            img.onerror = null; // Prevent infinite loop
+            img.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"%3E%3Crect fill="%23f3f4f6" width="200" height="200"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="14" fill="%239ca3af"%3EImage unavailable%3C/text%3E%3C/svg%3E';
+            img.classList.add('opacity-50');
+            
+            // Log the error
+            console.warn('Failed to load image:', img.alt);
+        }
+
+        function setupEventListeners() {
+            // Filter controls
+            document.getElementById('event-filter').addEventListener('change', handleFilterChange);
+            document.getElementById('photo-type-filter').addEventListener('change', handleFilterChange);
+            
+            // Download controls
+            document.getElementById('deselect-all-btn').addEventListener('click', deselectAll);
+            document.getElementById('download-selected-btn').addEventListener('click', downloadSelected);
+            
+            // Modal controls
+            document.getElementById('close-modal').addEventListener('click', closeFullView);
+            document.getElementById('prev-photo').addEventListener('click', showPrevPhoto);
+            document.getElementById('next-photo').addEventListener('click', showNextPhoto);
+            document.getElementById('download-current-photo').addEventListener('click', downloadCurrentPhoto);
+            
+            // Keyboard navigation
+            document.addEventListener('keydown', handleKeyboardNavigation);
+        }
+
+        function handleFilterChange() {
+            // Get current filter values
+            const eventFilter = document.getElementById('event-filter').value;
+            const photoTypeFilter = document.getElementById('photo-type-filter').value;
+            
+            // Update filters state
+            filters.event = eventFilter;
+            filters.type = photoTypeFilter;
+            
+            // Apply filters to photos
+            applyFilters();
+            
+            // Re-render event cards with filtered photos
+            renderEventCards();
+        }
+        
+        function applyFilters() {
+            // Start with all photos
+            filteredPhotos = [...allPhotos];
+            
+            // Apply event filter
+            if (filters.event !== 'all') {
+                filteredPhotos = filteredPhotos.filter(photo => photo.eventId === filters.event);
+            }
+            
+            // Apply photo type filter
+            if (filters.type !== 'all') {
+                filteredPhotos = filteredPhotos.filter(photo => photo.photoType === filters.type);
+            }
+        }
+
+        function deselectAll() {
+            // Clear all selections
+            selectedPhotos.clear();
+            
+            // Uncheck all checkboxes
+            document.querySelectorAll('.photo-checkbox').forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            
+            updateSelectionUI();
+        }
+
+        async function downloadSelected(retryCount = 0) {
+            if (selectedPhotos.size === 0) return;
+            
+            const downloadBtn = document.getElementById('download-selected-btn');
+            const originalBtnContent = downloadBtn.innerHTML;
+            const MAX_RETRIES = 1;
+            
+            try {
+                // Show loading state
+                downloadBtn.disabled = true;
+                downloadBtn.innerHTML = `
+                    <svg class="w-5 h-5 inline mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    Downloading...
+                `;
+                
+                // Convert selected photos to array and group by event
+                const selectedPhotoIds = Array.from(selectedPhotos);
+                
+                // Validate we have photos to download
+                if (selectedPhotoIds.length === 0) {
+                    showMessage('No photos selected. Please select at least one photo.', 'error');
+                    return;
+                }
+                
+                // Check for resource limits
+                if (selectedPhotoIds.length > 500) {
+                    throw new Error('TOO_MANY_PHOTOS: Please select fewer than 500 photos at a time.');
+                }
+                
+                // Validate all selected photos still exist in allPhotos
+                const validPhotoIds = selectedPhotoIds.filter(photoId => {
+                    return allPhotos.some(p => `${p.eventId}_${p.filename}` === photoId);
+                });
+                
+                if (validPhotoIds.length === 0) {
+                    throw new Error('NO_PHOTOS_FOUND: Selected photos are no longer available.');
+                }
+                
+                if (validPhotoIds.length < selectedPhotoIds.length) {
+                    showMessage(`${selectedPhotoIds.length - validPhotoIds.length} photo(s) are no longer available and will be skipped.`, 'error', 3000);
+                    // Update selection to only valid photos
+                    selectedPhotos.clear();
+                    validPhotoIds.forEach(id => selectedPhotos.add(id));
+                    updateSelectionUI();
+                }
+                
+                // Single photo - direct download
+                if (validPhotoIds.length === 1) {
+                    const photoId = validPhotoIds[0];
+                    const photo = allPhotos.find(p => `${p.eventId}_${p.filename}` === photoId);
+                    
+                    if (!photo) {
+                        throw new Error('Photo not found. It may have been deleted.');
+                    }
+                    
+                    try {
+                        // Create a temporary link and trigger download
+                        const link = document.createElement('a');
+                        link.href = photo.url;
+                        link.download = photo.filename.replace('watermarked_', '');
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        
+                        // Show success message
+                        showMessage('Photo downloaded successfully!', 'success');
+                        
+                        // Add to download history with photo URL
+                        addToDownloadHistory(photo.eventName, 1, [photo.url]);
+                    } catch (err) {
+                        throw new Error('Failed to download photo. Please try again.');
+                    }
+                } else {
+                    // Multiple photos - ZIP download
+                    // Group photos by event for the API call
+                    const photosByEvent = {};
+                    
+                    validPhotoIds.forEach(photoId => {
+                        const photo = allPhotos.find(p => `${p.eventId}_${p.filename}` === photoId);
+                        if (photo) {
+                            if (!photosByEvent[photo.eventId]) {
+                                photosByEvent[photo.eventId] = {
+                                    event_id: photo.eventId,
+                                    person_id: photo.personId,
+                                    event_name: photo.eventName,
+                                    photos: []
+                                };
+                            }
+                            photosByEvent[photo.eventId].photos.push({
+                                filename: photo.filename,
+                                photoType: photo.photoType
+                            });
+                        }
+                    });
+                    
+                    // If photos are from a single event, use that event's data
+                    const eventIds = Object.keys(photosByEvent);
+                    let eventNameForHistory = '';
+                    
+                    if (eventIds.length === 1) {
+                        const eventData = photosByEvent[eventIds[0]];
+                        eventNameForHistory = eventData.event_name;
+                        await downloadZip(eventData.event_id, eventData.person_id, eventData.photos, eventData.event_name);
+                    } else {
+                        // Multiple events - download from first event (or we could make multiple calls)
+                        // For simplicity, we'll use the first event's person_id and create one ZIP
+                        const firstEventId = eventIds[0];
+                        const firstEventData = photosByEvent[firstEventId];
+                        
+                        // Collect all photos
+                        const allSelectedPhotos = [];
+                        eventIds.forEach(eventId => {
+                            allSelectedPhotos.push(...photosByEvent[eventId].photos);
+                        });
+                        
+                        eventNameForHistory = eventIds.map(id => photosByEvent[id].event_name).join(', ');
+                        await downloadZip(firstEventData.event_id, firstEventData.person_id, allSelectedPhotos, 'multiple_events');
+                    }
+                    
+                    // Show success message
+                    showMessage(`${validPhotoIds.length} photos downloaded successfully!`, 'success');
+                    
+                    // Collect photo URLs for thumbnails (up to 4)
+                    const downloadedPhotoUrls = validPhotoIds.slice(0, 4).map(photoId => {
+                        const photo = allPhotos.find(p => `${p.eventId}_${p.filename}` === photoId);
+                        return photo ? photo.url : null;
+                    }).filter(url => url !== null);
+                    
+                    // Add to download history (only after successful download)
+                    addToDownloadHistory(eventNameForHistory, validPhotoIds.length, downloadedPhotoUrls);
+                }
+                
+            } catch (error) {
+                console.error('Download error:', error);
+                
+                // Handle specific error types
+                const errorMessage = error.message || 'Unknown error';
+                
+                // Session expired
+                if (errorMessage.includes('401') || errorMessage.includes('SESSION_EXPIRED')) {
+                    showMessage('Your session has expired. Please log in again.', 'error');
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 2000);
+                    return;
+                }
+                
+                // Too many photos
+                if (errorMessage.includes('TOO_MANY_PHOTOS') || errorMessage.includes('413') || errorMessage.includes('MEMORY_ERROR')) {
+                    showMessage('Too many photos selected. Please select fewer photos (max 500).', 'error');
+                    return;
+                }
+                
+                // ZIP size limit
+                if (errorMessage.includes('ZIP_SIZE_LIMIT') || errorMessage.includes('100MB')) {
+                    showMessage('Selected photos exceed size limit (100MB). Please select fewer photos.', 'error');
+                    return;
+                }
+                
+                // Disk space issues
+                if (errorMessage.includes('DISK_FULL') || errorMessage.includes('INSUFFICIENT_DISK_SPACE') || errorMessage.includes('507')) {
+                    showMessage('Server storage is full. Please try again later or contact support.', 'error');
+                    return;
+                }
+                
+                // No photos found
+                if (errorMessage.includes('NO_PHOTOS_FOUND') || errorMessage.includes('404')) {
+                    showMessage('Selected photos were not found. They may have been deleted.', 'error');
+                    return;
+                }
+                
+                // Invalid request
+                if (errorMessage.includes('INVALID_REQUEST') || errorMessage.includes('400')) {
+                    showMessage('Invalid request. Please refresh the page and try again.', 'error');
+                    return;
+                }
+                
+                // Network error with retry
+                if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+                    if (retryCount < MAX_RETRIES) {
+                        showMessage(`Network error. Retrying... (${retryCount + 1}/${MAX_RETRIES})`, 'error');
+                        setTimeout(() => downloadSelected(retryCount + 1), 2000);
+                        return;
+                    }
+                    showMessage('Network error. Please check your connection and try again.', 'error');
+                    return;
+                }
+                
+                // Generic error
+                showMessage(errorMessage.includes(':') ? errorMessage.split(':')[1].trim() : 'Download failed. Please try again.', 'error');
+                // Preserve selections on error - they're already in the Set
+            } finally {
+                // Restore button state
+                downloadBtn.disabled = false;
+                downloadBtn.innerHTML = originalBtnContent;
+            }
+        }
+        
+        async function downloadZip(eventId, personId, photos, eventName) {
+            // Set timeout for large downloads
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout for ZIP
+            
+            try {
+                const response = await fetch('/api/download_photos', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        event_id: eventId,
+                        person_id: personId,
+                        photos: photos
+                    }),
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                // Handle authentication errors
+                if (response.status === 401 || response.status === 403) {
+                    throw new Error('SESSION_EXPIRED: Your session has expired');
+                }
+                
+                // Handle resource limit errors
+                if (response.status === 413) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || 'TOO_MANY_PHOTOS: File size limit exceeded');
+                }
+                
+                // Handle not found errors
+                if (response.status === 404) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || 'NO_PHOTOS_FOUND: Photos not found');
+                }
+                
+                // Handle insufficient storage
+                if (response.status === 507) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || 'Server storage full. Please try again later.');
+                }
+                
+                // Handle bad request
+                if (response.status === 400) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || 'Invalid request. Please refresh and try again.');
+                }
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || `Download failed with status: ${response.status}`);
+                }
+                
+                // Get the blob from response
+                const blob = await response.blob();
+                
+                // Verify blob has content
+                if (blob.size === 0) {
+                    throw new Error('Downloaded file is empty. Please try again.');
+                }
+                
+                // Create download link
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                
+                // Remove watermarked_ prefix from event name if present
+                const cleanEventName = eventName.replace('watermarked_', '').replace(/[^a-zA-Z0-9_-]/g, '_');
+                link.download = `picme_photos_${cleanEventName}.zip`;
+                
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                // Clean up the blob URL after a short delay
+                setTimeout(() => {
+                    window.URL.revokeObjectURL(url);
+                }, 100);
+                
+            } catch (error) {
+                clearTimeout(timeoutId);
+                
+                // Handle timeout
+                if (error.name === 'AbortError') {
+                    throw new Error('Download timed out. Please try selecting fewer photos.');
+                }
+                
+                throw error;
+            }
+        }
+        
+        function showMessage(message, type = 'info', duration = 5000) {
+            // Remove any existing messages
+            const existingMessages = document.querySelectorAll('.toast-message');
+            existingMessages.forEach(msg => {
+                try {
+                    document.body.removeChild(msg);
+                } catch (e) {
+                    // Message already removed
+                }
+            });
+            
+            // Create message element
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `toast-message fixed top-20 right-4 z-50 px-6 py-3 rounded-lg shadow-lg transition-opacity duration-300 max-w-md ${
+                type === 'success' ? 'bg-green-500 text-white' : 
+                type === 'error' ? 'bg-red-500 text-white' : 
+                'bg-blue-500 text-white'
+            }`;
+            
+            // Create message content with icon
+            const icon = type === 'success' ? 
+                '<svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>' :
+                type === 'error' ?
+                '<svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>' :
+                '<svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>';
+            
+            messageDiv.innerHTML = `
+                <div class="flex items-start">
+                    <div class="flex-shrink-0">${icon}</div>
+                    <div class="flex-1 text-sm">${escapeHtml(message)}</div>
+                </div>
+            `;
+            
+            document.body.appendChild(messageDiv);
+            
+            // Fade out and remove after duration
+            const timeoutId = setTimeout(() => {
+                messageDiv.style.opacity = '0';
+                setTimeout(() => {
+                    try {
+                        document.body.removeChild(messageDiv);
+                    } catch (e) {
+                        // Message already removed
+                    }
+                }, 300);
+            }, duration);
+            
+            // Allow clicking to dismiss
+            messageDiv.style.cursor = 'pointer';
+            messageDiv.addEventListener('click', () => {
+                clearTimeout(timeoutId);
+                messageDiv.style.opacity = '0';
+                setTimeout(() => {
+                    try {
+                        document.body.removeChild(messageDiv);
+                    } catch (e) {
+                        // Message already removed
+                    }
+                }, 300);
+            });
+        }
+        
+        function addToDownloadHistory(eventName, photoCount, photoUrls = []) {
+            console.log('Adding to download history:', eventName, photoCount, photoUrls);
+            
+            // Get existing history from localStorage
+            let history = [];
+            try {
+                const stored = localStorage.getItem('downloadHistory');
+                if (stored) {
+                    history = JSON.parse(stored);
+                    // Validate that it's an array
+                    if (!Array.isArray(history)) {
+                        console.warn('Invalid download history format, resetting');
+                        history = [];
+                    }
+                }
+            } catch (e) {
+                console.error('Error reading download history:', e);
+                // Reset history on error
+                history = [];
+            }
+            
+            // Limit photo URLs to first 4 for thumbnails (to save space)
+            const thumbnailUrls = photoUrls.slice(0, 4);
+            
+            // Create new entry
+            const entry = {
+                id: generateUUID(),
+                timestamp: new Date().toISOString(),
+                event_name: eventName || 'Unknown Event',
+                photo_count: photoCount || 0,
+                photo_urls: thumbnailUrls
+            };
+            
+            console.log('Created history entry:', entry);
+            
+            // Add to beginning of array
+            history.unshift(entry);
+            
+            // Keep only last 10 entries
+            if (history.length > 10) {
+                history = history.slice(0, 10);
+            }
+            
+            // Save back to localStorage
+            try {
+                localStorage.setItem('downloadHistory', JSON.stringify(history));
+                console.log('Successfully saved download history to localStorage');
+            } catch (e) {
+                console.error('Error saving download history:', e);
+                // Check if it's a quota exceeded error
+                if (e.name === 'QuotaExceededError') {
+                    console.warn('localStorage quota exceeded, clearing old history');
+                    try {
+                        // Try to save with just the new entry
+                        localStorage.setItem('downloadHistory', JSON.stringify([entry]));
+                    } catch (e2) {
+                        console.error('Failed to save even single entry:', e2);
+                    }
+                }
+            }
+            
+            // Refresh the display
+            console.log('Refreshing download history display');
+            loadDownloadHistory();
+        }
+        
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0;
+                const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        function closeFullView() {
+            const modal = document.getElementById('fullview-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function showPrevPhoto() {
+            if (currentPhotoIndex > 0) {
+                currentPhotoIndex--;
+                updateModalPhoto();
+            }
+        }
+
+        function showNextPhoto() {
+            if (currentPhotoIndex < filteredPhotos.length - 1) {
+                currentPhotoIndex++;
+                updateModalPhoto();
+            }
+        }
+        
+        function updateModalPhoto() {
+            const photo = filteredPhotos[currentPhotoIndex];
+            
+            // Update modal image
+            const fullviewImage = document.getElementById('fullview-image');
+            fullviewImage.src = photo.url;
+            fullviewImage.alt = photo.filename;
+            
+            // Update photo counter
+            const photoCounter = document.getElementById('photo-counter');
+            photoCounter.textContent = `${currentPhotoIndex + 1} / ${filteredPhotos.length}`;
+            
+            // Update navigation button states
+            updateNavigationButtons();
+        }
+        
+        function updateNavigationButtons() {
+            const prevBtn = document.getElementById('prev-photo');
+            const nextBtn = document.getElementById('next-photo');
+            
+            // Disable/enable prev button
+            if (currentPhotoIndex === 0) {
+                prevBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                prevBtn.disabled = true;
+            } else {
+                prevBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                prevBtn.disabled = false;
+            }
+            
+            // Disable/enable next button
+            if (currentPhotoIndex === filteredPhotos.length - 1) {
+                nextBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                nextBtn.disabled = true;
+            } else {
+                nextBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                nextBtn.disabled = false;
+            }
+        }
+
+        function downloadCurrentPhoto() {
+            const photo = filteredPhotos[currentPhotoIndex];
+            
+            if (!photo) {
+                console.error('No photo to download');
+                showMessage('Photo not found. Please try again.', 'error');
+                return;
+            }
+            
+            try {
+                // Create a temporary link and trigger download
+                const link = document.createElement('a');
+                link.href = photo.url;
+                link.download = photo.filename.replace('watermarked_', '');
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                // Show success message
+                showMessage('Photo downloaded successfully!', 'success');
+                
+                // Add to download history with photo URL
+                addToDownloadHistory(photo.eventName, 1, [photo.url]);
+            } catch (error) {
+                console.error('Error downloading photo:', error);
+                showMessage('Failed to download photo. Please try again.', 'error');
+            }
+        }
+
+        function handleKeyboardNavigation(e) {
+            const modal = document.getElementById('fullview-modal');
+            if (!modal.classList.contains('hidden')) {
+                if (e.key === 'Escape') closeFullView();
+                if (e.key === 'ArrowLeft') showPrevPhoto();
+                if (e.key === 'ArrowRight') showNextPhoto();
+            }
+        }
+
+        function loadDownloadHistory() {
+            console.log('Loading download history...');
+            const emptyHistoryState = document.getElementById('empty-history-state');
+            const historyEntries = document.getElementById('history-entries');
+            
+            // Get history from localStorage
+            let history = [];
+            try {
+                const stored = localStorage.getItem('downloadHistory');
+                console.log('Stored history from localStorage:', stored);
+                if (stored) {
+                    history = JSON.parse(stored);
+                    // Validate that it's an array
+                    if (!Array.isArray(history)) {
+                        console.warn('Invalid download history format');
+                        history = [];
+                        // Clear invalid data
+                        localStorage.removeItem('downloadHistory');
+                    }
+                }
+            } catch (e) {
+                console.error('Error reading download history:', e);
+                // Clear corrupted data
+                try {
+                    localStorage.removeItem('downloadHistory');
+                } catch (e2) {
+                    console.error('Failed to clear corrupted history:', e2);
+                }
+            }
+            
+            console.log('Parsed history:', history);
+            
+            if (history.length === 0) {
+                console.log('No history found, showing empty state');
+                emptyHistoryState.classList.remove('hidden');
+                historyEntries.classList.add('hidden');
+                return;
+            }
+            
+            // Show history entries
+            console.log('Showing history entries');
+            emptyHistoryState.classList.add('hidden');
+            historyEntries.classList.remove('hidden');
+            
+            // Render history entries (limit to 10)
+            const displayHistory = history.slice(0, 10);
+            try {
+                historyEntries.innerHTML = displayHistory.map(entry => {
+                    // Validate entry has required fields
+                    if (!entry || typeof entry !== 'object') {
+                        return '';
+                    }
+                    
+                    const eventName = entry.event_name || 'Unknown Event';
+                    const photoCount = entry.photo_count || 0;
+                    
+                    let formattedDate = 'Unknown Date';
+                    try {
+                        const date = new Date(entry.timestamp);
+                        if (!isNaN(date.getTime())) {
+                            formattedDate = date.toLocaleDateString('en-US', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            });
+                        }
+                    } catch (e) {
+                        console.error('Error formatting date:', e);
+                    }
+                    
+                    // Generate thumbnails HTML if photo URLs exist
+                    const photoUrls = entry.photo_urls || [];
+                    let thumbnailsHtml = '';
+                    if (photoUrls.length > 0) {
+                        thumbnailsHtml = `
+                            <div class="flex gap-1 mt-2">
+                                ${photoUrls.map(url => `
+                                    <div class="w-12 h-12 rounded overflow-hidden bg-gray-100 flex-shrink-0">
+                                        <img src="${escapeHtml(url)}" alt="Downloaded photo" class="w-full h-full object-cover" />
+                                    </div>
+                                `).join('')}
+                                ${photoCount > photoUrls.length ? `
+                                    <div class="w-12 h-12 rounded bg-gray-200 flex items-center justify-center text-xs text-gray-600 flex-shrink-0">
+                                        +${photoCount - photoUrls.length}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `;
+                    }
+                    
+                    return `
+                        <div class="py-3 border-b border-gray-200 last:border-b-0">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">
+                                    <p class="text-sm font-medium text-gray-900">${escapeHtml(eventName)}</p>
+                                    <p class="text-xs text-gray-500">${formattedDate}</p>
+                                    ${thumbnailsHtml}
+                                </div>
+                                <div class="text-sm text-gray-600 ml-4 flex-shrink-0">
+                                    ${photoCount} photo${photoCount !== 1 ? 's' : ''}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).filter(html => html !== '').join('');
+            } catch (e) {
+                console.error('Error rendering download history:', e);
+                historyEntries.innerHTML = '<p class="text-sm text-gray-500 text-center py-4">Error loading history</p>';
+            }
+        }
+    </script>
+</body>
+</html>

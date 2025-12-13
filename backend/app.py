@@ -172,7 +172,17 @@ def serve_index():
 def serve_logo():
     """Serve the PicMe logo image"""
     frontend_dir = os.path.join(BASE_DIR, '..', 'frontend')
-    return send_from_directory(frontend_dir, 'picme.jpeg')
+    # Try JPEG first, fallback to SVG
+    if os.path.exists(os.path.join(frontend_dir, 'picme.jpeg')):
+        return send_from_directory(frontend_dir, 'picme.jpeg')
+    else:
+        return send_from_directory(frontend_dir, 'picme.svg')
+
+@app.route('/picme.svg')
+def serve_logo_svg():
+    """Serve the PicMe logo SVG"""
+    frontend_dir = os.path.join(BASE_DIR, '..', 'frontend')
+    return send_from_directory(frontend_dir, 'picme.svg')
 
 
 @app.route('/login')
@@ -214,6 +224,12 @@ def serve_biometric_authentication_portal():
 @login_required
 def serve_personal_photo_gallery():
     return render_template('personal_photo_gallery.html')
+
+
+@app.route('/download_page')
+@login_required
+def serve_download_page():
+    return render_template('download_page.html')
 
 
 @app.route('/event_organizer')
@@ -551,6 +567,9 @@ def recognize_face():
         except ValueError:
             # If for some reason ID isn't in list, just ignore
             pass
+
+        # Store person_id in session for future API calls
+        session['person_id'] = person_id
 
         # Locate this person's photos for the requested event
         person_dir = os.path.join(app.config['PROCESSED_FOLDER'], event_id, person_id)
@@ -1056,55 +1075,390 @@ def get_private_photo(event_id, person_id, photo_type, filename):
     return send_from_directory(photo_path, filename)
 
 
+@app.route('/api/user_photos', methods=['GET'])
+@login_required
+def get_user_photos():
+    """
+    Get all photos for the authenticated user across all events.
+    Returns events with photo metadata organized by event.
+    """
+    try:
+        # Validate session is still active
+        if not session.get('user_email'):
+            return jsonify({
+                "success": False,
+                "error": "Session expired. Please log in again.",
+                "error_code": "SESSION_EXPIRED"
+            }), 401
+        
+        # Get person_id from session (set during face recognition)
+        person_id = session.get('person_id')
+        
+        if not person_id:
+            return jsonify({
+                "success": False,
+                "error": "No person_id found. Please authenticate via biometric scan first.",
+                "error_code": "NO_PERSON_ID"
+            }), 404
+
+        # Load events metadata with error handling
+        events_data = []
+        try:
+            if os.path.exists(EVENTS_DATA_PATH):
+                with open(EVENTS_DATA_PATH, 'r') as f:
+                    events_data = json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"Error loading events data: {e}")
+            # Continue with empty events_data - we'll use defaults
+
+        # Scan processed folder for user's photos across all events
+        user_events = []
+        total_photos = 0
+
+        if not os.path.exists(app.config['PROCESSED_FOLDER']):
+            print(f"Processed folder does not exist: {app.config['PROCESSED_FOLDER']}")
+            return jsonify({
+                "success": True,
+                "events": [],
+                "total_photos": 0
+            })
+
+        try:
+            for event_id in os.listdir(app.config['PROCESSED_FOLDER']):
+                event_dir = os.path.join(app.config['PROCESSED_FOLDER'], event_id)
+                
+                if not os.path.isdir(event_dir):
+                    continue
+
+                # Check if this person has photos in this event
+                person_dir = os.path.join(event_dir, person_id)
+                
+                if not os.path.exists(person_dir):
+                    continue
+
+                # Get individual and group photos
+                individual_dir = os.path.join(person_dir, "individual")
+                group_dir = os.path.join(person_dir, "group")
+
+                individual_photos = []
+                group_photos = []
+
+                try:
+                    if os.path.exists(individual_dir):
+                        for filename in os.listdir(individual_dir):
+                            if filename.lower().endswith(('.png', '.jpg', '.jpeg')):
+                                individual_photos.append({
+                                    "filename": filename,
+                                    "url": f"/photos/{event_id}/{person_id}/individual/{filename}"
+                                })
+                except OSError as e:
+                    print(f"Error reading individual photos for {event_id}: {e}")
+                    # Continue with empty list
+
+                try:
+                    if os.path.exists(group_dir):
+                        for filename in os.listdir(group_dir):
+                            if filename.lower().endswith(('.png', '.jpg', '.jpeg')):
+                                group_photos.append({
+                                    "filename": filename,
+                                    "url": f"/photos/{event_id}/{person_id}/group/{filename}"
+                                })
+                except OSError as e:
+                    print(f"Error reading group photos for {event_id}: {e}")
+                    # Continue with empty list
+
+                # Only include events where user has photos
+                if individual_photos or group_photos:
+                    # Find event metadata
+                    event_metadata = next(
+                        (e for e in events_data if e['id'] == event_id),
+                        {
+                            "name": event_id,
+                            "location": "Unknown",
+                            "date": "Unknown",
+                            "category": "General"
+                        }
+                    )
+
+                    event_info = {
+                        "event_id": event_id,
+                        "event_name": event_metadata.get('name', event_id),
+                        "event_date": event_metadata.get('date', 'Unknown'),
+                        "event_location": event_metadata.get('location', 'Unknown'),
+                        "event_category": event_metadata.get('category', 'General'),
+                        "person_id": person_id,
+                        "individual_photos": individual_photos,
+                        "group_photos": group_photos,
+                        "photo_count": len(individual_photos) + len(group_photos)
+                    }
+
+                    user_events.append(event_info)
+                    total_photos += event_info['photo_count']
+        except OSError as e:
+            print(f"Error scanning processed folder: {e}")
+            return jsonify({
+                "success": False,
+                "error": "Unable to access photo storage. Please try again later.",
+                "error_code": "STORAGE_ERROR"
+            }), 500
+
+        # Sort events by date (most recent first)
+        user_events.sort(key=lambda x: x['event_date'], reverse=True)
+
+        return jsonify({
+            "success": True,
+            "events": user_events,
+            "total_photos": total_photos
+        })
+
+    except Exception as e:
+        print(f"Error fetching user photos: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": "An unexpected error occurred while loading your photos. Please try again.",
+            "error_code": "INTERNAL_ERROR"
+        }), 500
+
+
 @app.route('/api/download_photos', methods=['POST'])
 @login_required
 def download_photos():
     """
     Download multiple photos as a ZIP file (for personal gallery)
     """
+    zip_path = None
     try:
         import zipfile
         from flask import send_file
         
+        # Validate session is still active
+        if not session.get('user_email'):
+            return jsonify({
+                "success": False,
+                "error": "Session expired. Please log in again.",
+                "error_code": "SESSION_EXPIRED"
+            }), 401
+        
         data = request.get_json()
+        if not data:
+            return jsonify({
+                "success": False, 
+                "error": "Invalid request format",
+                "error_code": "INVALID_REQUEST"
+            }), 400
+            
         event_id = data.get('event_id')
         person_id = data.get('person_id')
         photos = data.get('photos', [])
 
         if not all([event_id, person_id, photos]):
-            return jsonify({"success": False, "error": "Missing required parameters"}), 400
+            return jsonify({
+                "success": False, 
+                "error": "Missing required parameters (event_id, person_id, or photos)",
+                "error_code": "MISSING_PARAMETERS"
+            }), 400
+        
+        # Validate photos is a list
+        if not isinstance(photos, list):
+            return jsonify({
+                "success": False,
+                "error": "Invalid photos parameter. Expected a list.",
+                "error_code": "INVALID_PHOTOS_FORMAT"
+            }), 400
+        
+        # Validate photos list is not empty
+        if len(photos) == 0:
+            return jsonify({
+                "success": False,
+                "error": "No photos selected for download.",
+                "error_code": "NO_PHOTOS_SELECTED"
+            }), 400
 
+        # Validate photo count and estimate size (max 100MB)
+        MAX_PHOTOS = 500
+        if len(photos) > MAX_PHOTOS:
+            return jsonify({
+                "success": False,
+                "error": f"Too many photos selected. Maximum is {MAX_PHOTOS} photos per download.",
+                "error_code": "TOO_MANY_PHOTOS"
+            }), 413
+
+        # Check disk space availability
+        try:
+            import shutil
+            stat = shutil.disk_usage(app.config['PROCESSED_FOLDER'])
+            free_space = stat.free
+            MIN_FREE_SPACE = 200 * 1024 * 1024  # Require at least 200MB free
+            
+            if free_space < MIN_FREE_SPACE:
+                return jsonify({
+                    "success": False,
+                    "error": "Insufficient disk space on server. Please try again later.",
+                    "error_code": "INSUFFICIENT_DISK_SPACE"
+                }), 507
+        except Exception as e:
+            print(f"Warning: Could not check disk space: {e}")
+            # Continue anyway - this is just a precaution
+        
         # Create a temporary ZIP file
         zip_filename = f"photos_{event_id}_{person_id}_{uuid.uuid4().hex[:8]}.zip"
         zip_path = os.path.join(app.config['PROCESSED_FOLDER'], zip_filename)
 
-        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            for photo in photos:
-                filename = photo.get('filename')
-                photo_type = photo.get('photoType')
-                
-                # Remove watermarked_ prefix if present for the actual file
-                actual_filename = filename.replace('watermarked_', '') if filename.startswith('watermarked_') else filename
-                
-                photo_path = os.path.join(
-                    app.config['PROCESSED_FOLDER'],
-                    event_id,
-                    person_id,
-                    photo_type,
-                    filename
-                )
+        photos_added = 0
+        total_size = 0
+        MAX_ZIP_SIZE = 100 * 1024 * 1024  # 100MB
 
-                if os.path.exists(photo_path):
-                    # Add to ZIP with a clean filename
-                    zipf.write(photo_path, arcname=actual_filename)
+        try:
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for photo in photos:
+                    # Validate photo object structure
+                    if not isinstance(photo, dict):
+                        print(f"Invalid photo object: {photo}")
+                        continue
+                    
+                    filename = photo.get('filename')
+                    photo_type = photo.get('photoType')
+                    
+                    if not filename or not photo_type:
+                        print(f"Missing filename or photoType: {photo}")
+                        continue
+                    
+                    # Validate photo_type
+                    if photo_type not in ['individual', 'group']:
+                        print(f"Invalid photo_type: {photo_type}")
+                        continue
+                    
+                    # Remove watermarked_ prefix if present for the actual file
+                    actual_filename = filename.replace('watermarked_', '') if filename.startswith('watermarked_') else filename
+                    
+                    # Sanitize filename to prevent path traversal
+                    actual_filename = os.path.basename(actual_filename)
+                    
+                    photo_path = os.path.join(
+                        app.config['PROCESSED_FOLDER'],
+                        event_id,
+                        person_id,
+                        photo_type,
+                        filename
+                    )
+
+                    if os.path.exists(photo_path):
+                        try:
+                            # Check file size before adding
+                            file_size = os.path.getsize(photo_path)
+                            if total_size + file_size > MAX_ZIP_SIZE:
+                                print(f"ZIP size limit reached: {total_size} bytes")
+                                # Return partial success with warning
+                                if photos_added > 0:
+                                    break
+                                else:
+                                    if zip_path and os.path.exists(zip_path):
+                                        os.remove(zip_path)
+                                    return jsonify({
+                                        "success": False,
+                                        "error": "Selected photos exceed size limit (100MB). Please select fewer photos.",
+                                        "error_code": "ZIP_SIZE_LIMIT"
+                                    }), 413
+                            
+                            # Verify file is readable
+                            with open(photo_path, 'rb') as test_file:
+                                test_file.read(1)
+                            
+                            # Add to ZIP with a clean filename
+                            zipf.write(photo_path, arcname=actual_filename)
+                            photos_added += 1
+                            total_size += file_size
+                        except (IOError, OSError) as e:
+                            print(f"Error reading photo {photo_path}: {e}")
+                            continue
+                    else:
+                        print(f"Photo not found: {photo_path}")
+        except zipfile.BadZipFile as e:
+            print(f"Bad ZIP file error: {e}")
+            if zip_path and os.path.exists(zip_path):
+                try:
+                    os.remove(zip_path)
+                except:
+                    pass
+            return jsonify({
+                "success": False,
+                "error": "Unable to create valid ZIP file. Please try again.",
+                "error_code": "BAD_ZIP_FILE"
+            }), 500
+        except OSError as e:
+            print(f"Error creating ZIP file: {e}")
+            if zip_path and os.path.exists(zip_path):
+                try:
+                    os.remove(zip_path)
+                except:
+                    pass
+            
+            # Check if it's a disk space issue
+            if "No space left" in str(e) or "Disk quota exceeded" in str(e):
+                return jsonify({
+                    "success": False,
+                    "error": "Server disk space full. Please try again later or select fewer photos.",
+                    "error_code": "DISK_FULL"
+                }), 507
+            
+            return jsonify({
+                "success": False,
+                "error": "Unable to create download file. Please try again.",
+                "error_code": "ZIP_CREATION_ERROR"
+            }), 500
+        except MemoryError as e:
+            print(f"Memory error creating ZIP: {e}")
+            if zip_path and os.path.exists(zip_path):
+                try:
+                    os.remove(zip_path)
+                except:
+                    pass
+            return jsonify({
+                "success": False,
+                "error": "Too many photos selected. Please select fewer photos.",
+                "error_code": "MEMORY_ERROR"
+            }), 413
+
+        if photos_added == 0:
+            # Clean up empty ZIP
+            if os.path.exists(zip_path):
+                os.remove(zip_path)
+            return jsonify({
+                "success": False,
+                "error": "No photos were found to download. They may have been deleted.",
+                "error_code": "NO_PHOTOS_FOUND"
+            }), 404
+
+        # Verify ZIP file exists and has content
+        if not os.path.exists(zip_path) or os.path.getsize(zip_path) == 0:
+            return jsonify({
+                "success": False,
+                "error": "Failed to create download file",
+                "error_code": "EMPTY_ZIP"
+            }), 500
 
         # Send the ZIP file
-        response = send_file(
-            zip_path,
-            mimetype='application/zip',
-            as_attachment=True,
-            download_name=f"picme_photos_{event_id}.zip"
-        )
+        try:
+            response = send_file(
+                zip_path,
+                mimetype='application/zip',
+                as_attachment=True,
+                download_name=f"picme_photos_{event_id}.zip"
+            )
+        except Exception as e:
+            print(f"Error sending ZIP file: {e}")
+            if zip_path and os.path.exists(zip_path):
+                try:
+                    os.remove(zip_path)
+                except:
+                    pass
+            return jsonify({
+                "success": False,
+                "error": "Failed to send download file",
+                "error_code": "SEND_ERROR"
+            }), 500
 
         # Schedule cleanup of the ZIP file after sending
         def cleanup_zip():
@@ -1123,7 +1477,21 @@ def download_photos():
 
     except Exception as e:
         print(f"Error creating ZIP download: {e}")
-        return jsonify({"success": False, "error": "Failed to create download"}), 500
+        import traceback
+        traceback.print_exc()
+        
+        # Clean up ZIP file on error
+        if zip_path and os.path.exists(zip_path):
+            try:
+                os.remove(zip_path)
+            except:
+                pass
+                
+        return jsonify({
+            "success": False,
+            "error": "An unexpected error occurred during download. Please try again.",
+            "error_code": "INTERNAL_ERROR"
+        }), 500
 
 
 @app.route('/api/download_event_photos', methods=['POST'])
