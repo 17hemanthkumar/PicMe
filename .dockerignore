@@ -1,0 +1,82 @@
+# Version control
+.git
+.gitignore
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.py[cod]
+*$py.class
+
+# Environment files
+.env
+.env.local
+.env.*.local
+.env.docker.test
+
+# Test files and data
+.hypothesis
+.pytest_cache
+test_*.py
+*_test.py
+tests/
+conftest.py
+
+# Documentation
+*.md
+!README.md
+ADMIN_*.md
+DELETE_*.md
+DEPLOYMENT_*.md
+ERROR_*.md
+EVENT_*.md
+HOMEPAGE_*.md
+INDEX_*.md
+PROJECT_*.md
+SEPARATE_*.md
+USER_*.md
+IMPLEMENTATION_*.md
+
+# IDE and editor files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.editorconfig
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Build artifacts
+*.egg-info
+dist
+build
+*.so
+*.dylib
+*.dll
+
+# Logs
+*.log
+logs/
+
+# Frontend files (if not needed in backend container)
+frontend/
+
+# Spec files
+.kiro/
+
+# Data directories (will be mounted as volumes)
+uploads/
+processed/
+events_data.json
+
+# Temporary files
+*.tmp
+*.temp
+.cache/

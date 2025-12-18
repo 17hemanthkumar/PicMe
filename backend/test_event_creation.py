@@ -979,7 +979,7 @@ def test_invalid_file_type_rejection_on_create(client):
     assert response.status_code == 400
     response_data = json.loads(response.data)
     assert response_data['success'] is False
-    assert 'Invalid image format' in response_data['error']
+    assert 'Invalid file type' in response_data['error']
 
 
 def test_invalid_file_type_rejection_on_update(client):
@@ -1019,7 +1019,7 @@ def test_invalid_file_type_rejection_on_update(client):
     assert response.status_code == 400
     response_data = json.loads(response.data)
     assert response_data['success'] is False
-    assert 'Invalid image format' in response_data['error']
+    assert 'Invalid file type' in response_data['error']
 
 
 def test_thumbnail_functionality_comprehensive_workflow(client):

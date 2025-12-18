@@ -8,7 +8,6 @@ from flask import (
 )
 from functools import wraps
 import os
-print("DATABASE_URL =", os.environ.get("DATABASE_URL"))
 import base64
 import numpy as np
 import cv2
@@ -31,6 +30,12 @@ from face_utils import aggregate_face_encoding_from_bgr_frames, verify_liveness_
 
 
 # --- CONFIGURATION ---
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = Flask(
@@ -38,14 +43,25 @@ app = Flask(
     static_folder='../frontend/static',
     template_folder='../frontend/pages'
 )
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", "your_super_secret_key_here")
+
+# Environment variable configuration with logging
+FLASK_SECRET_KEY = os.environ.get("FLASK_SECRET_KEY")
+if not FLASK_SECRET_KEY:
+    logger.warning("FLASK_SECRET_KEY environment variable not set. Using default (not secure for production).")
+    FLASK_SECRET_KEY = "your_super_secret_key_here"
+app.secret_key = FLASK_SECRET_KEY
 
 # Neon connection string (set this in Render/Railway/locally)
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://USER:PASSWORD@HOST/DBNAME?sslmode=require"
-)
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    logger.warning("DATABASE_URL environment variable not set. Using default placeholder.")
+    DATABASE_URL = "postgresql://USER:PASSWORD@HOST/DBNAME?sslmode=require"
 
+# Port configuration
+PORT = int(os.environ.get("PORT", 8080))
+logger.info(f"Application will run on port: {PORT}")
+
+# File paths - use relative paths from BASE_DIR
 UPLOAD_FOLDER = os.path.join(BASE_DIR, '..', 'uploads')
 PROCESSED_FOLDER = os.path.join(BASE_DIR, '..', 'processed')
 EVENTS_DATA_PATH = os.path.join(BASE_DIR, '..', 'events_data.json')
@@ -56,8 +72,30 @@ app.config['PROCESSED_FOLDER'] = PROCESSED_FOLDER
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(PROCESSED_FOLDER, exist_ok=True)
+# Directory initialization with error handling
+try:
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+    logger.info(f"Upload folder ready: {UPLOAD_FOLDER}")
+except Exception as e:
+    logger.error(f"Failed to create upload folder: {e}")
+    raise
+
+try:
+    os.makedirs(PROCESSED_FOLDER, exist_ok=True)
+    logger.info(f"Processed folder ready: {PROCESSED_FOLDER}")
+except Exception as e:
+    logger.error(f"Failed to create processed folder: {e}")
+    raise
+
+# Initialize events_data.json if it doesn't exist
+try:
+    if not os.path.exists(EVENTS_DATA_PATH):
+        with open(EVENTS_DATA_PATH, 'w') as f:
+            json.dump([], f)
+        logger.info(f"Created events_data.json at: {EVENTS_DATA_PATH}")
+except Exception as e:
+    logger.error(f"Failed to create events_data.json: {e}")
+    raise
 
 
 # --- DISABLE CACHING FOR ALL RESPONSES ---
@@ -83,7 +121,8 @@ def get_db_connection():
         conn = psycopg2.connect(DATABASE_URL)
         return conn
     except Exception as err:
-        print(f"DB Error: {err}")
+        # Log error without exposing connection string details
+        logger.error("Database connection failed")
         return None
 
 
@@ -97,6 +136,75 @@ def login_required(f):
     return decorated_function
 
 
+# --- SECURITY HELPERS ---
+def sanitize_filename(filename):
+    """
+    Sanitize filename to prevent path traversal attacks.
+    Removes directory separators and ensures filename is safe.
+    """
+    import re
+    # Get just the basename (removes any path components)
+    filename = os.path.basename(filename)
+    # Remove any remaining path separators
+    filename = filename.replace('/', '').replace('\\', '')
+    # Remove any null bytes
+    filename = filename.replace('\x00', '')
+    # Remove leading dots to prevent hidden files
+    filename = filename.lstrip('.')
+    # Only allow alphanumeric, dash, underscore, and dot
+    filename = re.sub(r'[^a-zA-Z0-9._-]', '_', filename)
+    return filename
+
+
+def validate_file_upload(file, allowed_extensions=None, max_size_mb=10):
+    """
+    Validate uploaded file for security.
+    
+    Args:
+        file: FileStorage object from Flask request
+        allowed_extensions: Set of allowed file extensions (e.g., {'.png', '.jpg', '.jpeg'})
+        max_size_mb: Maximum file size in megabytes
+    
+    Returns:
+        tuple: (is_valid, error_message)
+    """
+    if not file or not file.filename:
+        return False, "No file provided"
+    
+    # Check file extension
+    if allowed_extensions:
+        file_ext = os.path.splitext(file.filename)[1].lower()
+        if file_ext not in allowed_extensions:
+            return False, f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
+    
+    # Check file size (read first chunk to verify it's not empty)
+    file.seek(0, os.SEEK_END)
+    file_size = file.tell()
+    file.seek(0)  # Reset to beginning
+    
+    if file_size == 0:
+        return False, "File is empty"
+    
+    max_size_bytes = max_size_mb * 1024 * 1024
+    if file_size > max_size_bytes:
+        return False, f"File too large. Maximum size: {max_size_mb}MB"
+    
+    return True, None
+
+
+def sanitize_path_component(component):
+    """
+    Sanitize a path component (like event_id or person_id) to prevent path traversal.
+    """
+    # Remove any path separators
+    component = str(component).replace('/', '').replace('\\', '')
+    # Remove null bytes
+    component = component.replace('\x00', '')
+    # Remove parent directory references
+    component = component.replace('..', '')
+    return component
+
+
 # --- IMAGE PROCESSING / FACE LEARNING ---
 def process_images(event_id):
     """
@@ -106,6 +214,9 @@ def process_images(event_id):
     - Classify image as individual / group and copy into processed folder
     """
     try:
+        # Sanitize event_id to prevent path traversal
+        event_id = sanitize_path_component(event_id)
+        
         input_dir = os.path.join(app.config['UPLOAD_FOLDER'], event_id)
         output_dir = os.path.join(app.config['PROCESSED_FOLDER'], event_id)
         os.makedirs(output_dir, exist_ok=True)
@@ -278,7 +389,7 @@ def register_user():
         return jsonify({"success": True, "message": "Registration successful!"}), 201
 
     except Exception as err:
-        print(f"Registration error: {err}")
+        logger.error("Registration error occurred")
         conn.rollback()
         return jsonify({"success": False, "error": "Registration failed"}), 500
     finally:
@@ -325,7 +436,7 @@ def login_user():
             return jsonify({"success": False, "error": "Invalid email or password"}), 401
 
     except Exception as err:
-        print(f"Error during login: {err}")
+        logger.error("Login error occurred")
         return jsonify({
             "success": False,
             "error": "An internal server error occurred during login."
@@ -384,7 +495,7 @@ def admin_register():
         return jsonify({"success": True, "message": "Admin account created successfully"})
 
     except Exception as e:
-        print(f"Error during admin registration: {e}")
+        logger.error("Admin registration error occurred")
         if conn:
             conn.close()
         return jsonify({"success": False, "error": "Registration failed"}), 500
@@ -428,7 +539,7 @@ def admin_login():
             return jsonify({"success": False, "message": "Invalid credentials"}), 401
 
     except Exception as e:
-        print(f"Error during admin login: {e}")
+        logger.error("Admin login error occurred")
         if conn:
             conn.close()
         return jsonify({"success": False, "message": "Login failed"}), 500
@@ -647,17 +758,18 @@ def create_event():
         thumbnail_path = "/static/images/default_event.jpg"
         
         if thumbnail_file and thumbnail_file.filename:
-            # Validate file format
+            # Validate file upload
             allowed_extensions = {'.png', '.jpg', '.jpeg'}
-            file_ext = os.path.splitext(thumbnail_file.filename)[1].lower()
+            is_valid, error_msg = validate_file_upload(thumbnail_file, allowed_extensions, max_size_mb=5)
             
-            if file_ext not in allowed_extensions:
+            if not is_valid:
                 return jsonify({
                     "success": False, 
-                    "error": f"Invalid image format. Allowed formats: PNG, JPG, JPEG"
+                    "error": error_msg
                 }), 400
             
-            # Generate unique filename with thumbnail_ prefix
+            # Sanitize and generate unique filename
+            file_ext = os.path.splitext(thumbnail_file.filename)[1].lower()
             thumbnail_filename = f"thumbnail_{uuid.uuid4().hex[:8]}{file_ext}"
             thumbnail_file_path = os.path.join(event_upload_dir, thumbnail_filename)
             
@@ -715,12 +827,14 @@ def create_event():
         }), 201
 
     except Exception as e:
-        print(f"Error creating event: {e}")
+        logger.error("Error creating event")
         return jsonify({"success": False, "error": "Failed to create event"}), 500
 
 
 @app.route('/api/qr_code/<event_id>')
 def get_qr_code(event_id):
+    # Sanitize event_id to prevent path traversal
+    event_id = sanitize_path_component(event_id)
     qr_path = os.path.join(app.config['UPLOAD_FOLDER'], event_id, f"{event_id}_qr.png")
     if os.path.exists(qr_path):
         return send_from_directory(
@@ -733,6 +847,9 @@ def get_qr_code(event_id):
 @app.route('/api/events/<event_id>/thumbnail')
 def get_event_thumbnail(event_id):
     """Serve event thumbnail"""
+    # Sanitize event_id to prevent path traversal
+    event_id = sanitize_path_component(event_id)
+    
     # Load events data to get thumbnail filename
     if os.path.exists(EVENTS_DATA_PATH):
         with open(EVENTS_DATA_PATH, 'r') as f:
@@ -741,15 +858,17 @@ def get_event_thumbnail(event_id):
         # Find the event
         event = next((e for e in events_data if e['id'] == event_id), None)
         if event and event.get('thumbnail_filename'):
+            # Sanitize thumbnail filename
+            thumbnail_filename = sanitize_filename(event['thumbnail_filename'])
             thumbnail_path = os.path.join(
                 app.config['UPLOAD_FOLDER'], 
                 event_id, 
-                event['thumbnail_filename']
+                thumbnail_filename
             )
             if os.path.exists(thumbnail_path):
                 return send_from_directory(
                     os.path.join(app.config['UPLOAD_FOLDER'], event_id),
-                    event['thumbnail_filename']
+                    thumbnail_filename
                 )
     
     return "Thumbnail not found", 404
@@ -773,9 +892,20 @@ def upload_event_photos(event_id):
             return jsonify({"success": False, "error": "Event not found"}), 404
 
         uploaded_files = []
+        allowed_extensions = {'.png', '.jpg', '.jpeg'}
+        
         for file in files:
-            if file and file.filename.lower().endswith(('.png', '.jpg', '.jpeg')):
-                filename = f"{uuid.uuid4().hex[:8]}_{file.filename}"
+            if file and file.filename:
+                # Validate each file
+                is_valid, error_msg = validate_file_upload(file, allowed_extensions, max_size_mb=10)
+                
+                if not is_valid:
+                    logger.warning(f"File upload validation failed: {error_msg}")
+                    continue  # Skip invalid files but continue processing others
+                
+                # Sanitize filename and generate unique name
+                safe_filename = sanitize_filename(file.filename)
+                filename = f"{uuid.uuid4().hex[:8]}_{safe_filename}"
                 file_path = os.path.join(event_dir, filename)
                 file.save(file_path)
                 uploaded_files.append(filename)
@@ -803,7 +933,7 @@ def upload_event_photos(event_id):
         }), 200
 
     except Exception as e:
-        print(f"Error uploading photos: {e}")
+        logger.error("Error uploading photos")
         return jsonify({"success": False, "error": "Failed to upload photos"}), 500
 
 
@@ -838,7 +968,7 @@ def get_my_events():
         return jsonify({"success": True, "events": []})
 
     except Exception as e:
-        print(f"Error fetching events: {e}")
+        logger.error("Error fetching events")
         return jsonify({"success": False, "error": "Failed to fetch events"}), 500
 
 
@@ -914,7 +1044,7 @@ def update_event(event_id):
         }), 200
     
     except Exception as e:
-        print(f"Error updating event: {e}")
+        logger.error("Error updating event")
         return jsonify({
             "success": False, 
             "error": "Failed to update event"
@@ -941,15 +1071,17 @@ def update_event_thumbnail(event_id):
         if not thumbnail_file or thumbnail_file.filename == '':
             return jsonify({"success": False, "error": "No thumbnail file selected"}), 400
         
-        # Validate file format
+        # Validate file upload
         allowed_extensions = {'.png', '.jpg', '.jpeg'}
-        file_ext = os.path.splitext(thumbnail_file.filename)[1].lower()
+        is_valid, error_msg = validate_file_upload(thumbnail_file, allowed_extensions, max_size_mb=5)
         
-        if file_ext not in allowed_extensions:
+        if not is_valid:
             return jsonify({
                 "success": False, 
-                "error": "Invalid image format. Allowed formats: PNG, JPG, JPEG"
+                "error": error_msg
             }), 400
+        
+        file_ext = os.path.splitext(thumbnail_file.filename)[1].lower()
         
         # Load events data
         if not os.path.exists(EVENTS_DATA_PATH):
@@ -1016,7 +1148,7 @@ def update_event_thumbnail(event_id):
         }), 200
     
     except Exception as e:
-        print(f"Error updating thumbnail: {e}")
+        logger.error("Error updating thumbnail")
         return jsonify({
             "success": False, 
             "error": "Failed to update thumbnail"
@@ -1129,8 +1261,16 @@ def get_event_photos(event_id):
 
 @app.route('/photos/<event_id>/all/<filename>')
 def get_public_photo(event_id, filename):
+    # Sanitize path components to prevent path traversal
+    event_id = sanitize_path_component(event_id)
+    filename = sanitize_filename(filename)
+    
     event_dir = os.path.join(app.config['PROCESSED_FOLDER'], event_id)
+    if not os.path.exists(event_dir):
+        return "File Not Found", 404
+    
     for person_id in os.listdir(event_dir):
+        person_id = sanitize_path_component(person_id)
         photo_path = os.path.join(event_dir, person_id, "group", filename)
         if os.path.exists(photo_path):
             return send_from_directory(
@@ -1146,12 +1286,26 @@ def get_private_photo(event_id, person_id, photo_type, filename):
     if not session.get('admin_logged_in') and not session.get('logged_in'):
         return "Unauthorized", 401
 
+    # Sanitize all path components to prevent path traversal
+    event_id = sanitize_path_component(event_id)
+    person_id = sanitize_path_component(person_id)
+    photo_type = sanitize_path_component(photo_type)
+    filename = sanitize_filename(filename)
+    
+    # Validate photo_type is one of the allowed values
+    if photo_type not in ['individual', 'group']:
+        return "Invalid photo type", 400
+
     photo_path = os.path.join(
         app.config['PROCESSED_FOLDER'],
         event_id,
         person_id,
         photo_type
     )
+    
+    if not os.path.exists(os.path.join(photo_path, filename)):
+        return "File Not Found", 404
+    
     return send_from_directory(photo_path, filename)
 
 
@@ -1680,6 +1834,10 @@ def serve_admin_photo(event_id, filename):
     if not session.get('admin_logged_in'):
         return "Unauthorized", 403
 
+    # Sanitize path components to prevent path traversal
+    event_id = sanitize_path_component(event_id)
+    filename = sanitize_filename(filename)
+
     upload_dir = os.path.join(app.config['UPLOAD_FOLDER'], event_id)
     if os.path.exists(os.path.join(upload_dir, filename)):
         return send_from_directory(upload_dir, filename)
@@ -1751,13 +1909,9 @@ def process_existing_uploads_on_startup():
 
 # --- ENTRY POINT ---
 if __name__ == '__main__':
-    if not os.path.exists(EVENTS_DATA_PATH):
-        # You can also create an empty list file here if you want
-        pass
-
     # Auto-generate known_faces.dat if it doesn't exist and there are photos to process
     if not os.path.exists(KNOWN_FACES_DATA_PATH):
-        print("[LOG] known_faces.dat not found. Checking for photos to process...")
+        logger.info("known_faces.dat not found. Checking for photos to process...")
         has_photos = False
         if os.path.exists(UPLOAD_FOLDER):
             for event_id in os.listdir(UPLOAD_FOLDER):
@@ -1771,14 +1925,15 @@ if __name__ == '__main__':
                         break
         
         if has_photos:
-            print("[LOG] Photos found. Auto-generating face recognition model...")
+            logger.info("Photos found. Auto-generating face recognition model...")
             process_existing_uploads_on_startup()
-            print("[LOG] Face recognition model generation started in background.")
+            logger.info("Face recognition model generation started in background.")
         else:
-            print("[LOG] No photos found. Face recognition model will be created when photos are uploaded.")
+            logger.info("No photos found. Face recognition model will be created when photos are uploaded.")
     else:
-        print("[LOG] Face recognition model loaded successfully.")
+        logger.info("Face recognition model loaded successfully.")
 
-    port = int(os.environ.get("PORT", 5000))
-    # Use 127.0.0.1 for localhost only, or 0.0.0.0 for network access
-    app.run(host='127.0.0.1', port=port, debug=True)
+    # Use PORT from environment variable (already set at top of file)
+    # Use 0.0.0.0 for container compatibility (allows external connections)
+    logger.info(f"Starting Flask application on 0.0.0.0:{PORT}")
+    app.run(host='0.0.0.0', port=PORT, debug=True)
