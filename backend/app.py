@@ -25,8 +25,8 @@ import psycopg2
 import psycopg2.extras
 
 # Face model
-from face_model import FaceRecognitionModel
-from face_utils import aggregate_face_encoding_from_bgr_frames, verify_liveness_from_bgr_frames
+from backend.face_model import FaceRecognitionModel
+from backend.face_utils import aggregate_face_encoding_from_bgr_frames, verify_liveness_from_bgr_frames
 
 
 # --- CONFIGURATION ---
@@ -40,8 +40,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = Flask(
     __name__,
-    static_folder='../frontend/static',
-    template_folder='../frontend/pages'
+    template_folder=os.path.join(BASE_DIR, "..", "frontend", "pages"),
+    static_folder=os.path.join(BASE_DIR, "..", "frontend")
 )
 
 # Environment variable configuration with logging
@@ -568,6 +568,21 @@ def admin_required(f):
 # --- EVENTS API / PUBLIC DATA ---
 @app.route('/events', methods=['GET'])
 def get_events():
+    try:
+        if os.path.exists(EVENTS_DATA_PATH):
+            with open(EVENTS_DATA_PATH, 'r') as f:
+                events_data = json.load(f)
+        else:
+            events_data = []
+        return jsonify(events_data)
+    except Exception as e:
+        print(f"Error loading events: {e}")
+        return jsonify([])
+
+
+@app.route('/api/events', methods=['GET'])
+def get_events_api():
+    """API endpoint to get all events without filtering"""
     try:
         if os.path.exists(EVENTS_DATA_PATH):
             with open(EVENTS_DATA_PATH, 'r') as f:

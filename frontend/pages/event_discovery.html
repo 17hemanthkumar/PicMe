@@ -76,8 +76,9 @@
 
             async function fetchEvents() {
                 try {
-                    const response = await fetch('/events');
+                    const response = await fetch('/api/events');
                     allEvents = await response.json();
+                    console.log("Loaded events:", allEvents); // IMPORTANT - for debugging
                     renderEvents(allEvents);
                 } catch (error) {
                     console.error("Error loading events:", error);

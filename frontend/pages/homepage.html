@@ -298,9 +298,10 @@
         }
 
         // Load events and initialize carousel
-        fetch('/events')
+        fetch('/api/events')
             .then(response => response.json())
             .then(events => {
+                console.log('Loaded events for carousel:', events);
                 initHeroCarousel(events);
             })
             .catch(error => {
@@ -313,9 +314,10 @@
             });
 
         // Load recent events from the database
-        fetch('/events')
+        fetch('/api/events')
             .then(response => response.json())
             .then(events => {
+                console.log('Loaded events for grid:', events);
                 const grid = document.getElementById('recentEventsGrid');
                 
                 if (events.length === 0) {

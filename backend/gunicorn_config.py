@@ -16,12 +16,12 @@ bind = "0.0.0.0:8080"
 backlog = 2048
 
 # Worker processes
-# Use 4 workers as recommended for CPU-bound face recognition tasks
+# Use 1 worker to avoid multiple ML model loads and reduce memory usage
 # Can be overridden with GUNICORN_WORKERS environment variable
-workers = int(os.environ.get('GUNICORN_WORKERS', '4'))
+workers = int(os.environ.get('GUNICORN_WORKERS', '1'))
 worker_class = 'sync'
 worker_connections = 1000
-timeout = 120  # 120 seconds for face recognition operations
+timeout = 300  # 300 seconds (5 minutes) for ML model loading and face recognition operations
 keepalive = 5
 
 # Graceful shutdown
